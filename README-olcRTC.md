@@ -1,123 +1,521 @@
 # olcRTC for Android
 
+[**Русский**](#русский) • [**English**](#english) • [**Сервер (olcrtc_FORK)**](https://github.com/Oleglog/olcrtc_FORK) • [**Releases**](https://github.com/Oleglog/Exclave_FORK/releases)
+
 A fork of [Exclave](https://github.com/dyhkwong/Exclave) that integrates
-[olcrtc](https://github.com/openlibrecommunity/olcrtc) as a first-class proxy
-type. olcrtc tunnels TCP/UDP traffic over WebRTC through whitelisted services
-(Yandex Telemost, SaluteJazz, Wildberries Stream) so that traffic is hard to
-block without breaking those services.
+[olcRTC](https://github.com/Oleglog/olcrtc_FORK) as a first-class proxy type.
+olcRTC tunnels TCP traffic over WebRTC through whitelisted Russian conferencing
+services (Yandex Telemost, SaluteJazz, Wildberries Stream) so it cannot be
+blocked without breaking the upstream service.
 
-> This is an Android-only client fork. The olcrtc server is a separate project
-> and is not modified here.
+> This is the **client** side of olcRTC. The server side is a separate
+> repository — [Oleglog/olcrtc_FORK](https://github.com/Oleglog/olcrtc_FORK) —
+> and you need to deploy it to a VPS before this app is useful.
 
-## Status
+---
 
-- [x] olcrtc/mobile bound into the same `libsagernetcore.aar` (single Go
-      runtime, no `libgojni.so` collision)
-- [x] New protocol type `TYPE_OLCRTC = 30` with Kryo-serialised `OLCRTCBean`
-      (provider / roomId / keyHex / DNS server)
-- [x] Settings screen + entry in *Add new profile*
-- [x] Lifecycle wired through `V2RayInstance` / `OLCRTCExternalInstance`
-      (V2Ray points at the local SOCKS5 listener exposed by olcrtc)
-- [x] App rebrand: `applicationId` = `community.openlibre.olcrtc.android`,
-      app name = `olcRTC`, fresh release keystore (not the upstream one)
-- [x] Localised strings (en + ru)
-- [x] Debug + release APKs build for `arm64-v8a`, `armeabi-v7a`, `x86`,
-      `x86_64`
+## Русский
 
-## Download
+### Что это
 
-Pre-built APKs are attached to the [GitHub
-releases](https://github.com/Oleglog/Exclave_FORK/releases) of this fork.
-For most phones you want `olcRTC-<version>-arm64-v8a.apk`.
+Android-приложение со встроенным olcRTC-клиентом. Создаёшь профиль типа
+**olcRTC**, вписываешь Provider / Room ID / Encryption Key, нажимаешь
+*Connect* — приложение поднимает локальный SOCKS5 на телефоне, заворачивает
+весь системный трафик через WebRTC-туннель к твоему VPS, и наружу выходит
+с IP-адреса VPS.
 
-The release APK is signed with a fresh self-signed key generated for this
-fork — **the signing certificate fingerprint is different from the upstream
-Exclave key**, so this app cannot be installed on top of an existing Exclave
-install (and vice versa). That is intentional.
+```
+[Apps на Android]
+       │
+       ▼
+[Exclave VpnService]
+       │
+       ▼
+[локальный SOCKS5 :2080]
+       │
+       ▼
+[olcRTC-клиент]
+       │
+       ▼ WebRTC DataChannel (UDP)
+[SFU видеоконф-сервиса в РФ — telemost.yandex.ru / wb_stream / jazz.sber.ru]
+       ▲
+       │ WebRTC DataChannel (UDP)
+       │
+[olcRTC-сервер на твоём VPS вне РФ]
+       │
+       ▼
+[Internet]
+```
 
-## Setting up the olcrtc server
+### Что добавлено в этом форке
 
-1. Clone https://github.com/openlibrecommunity/olcrtc on a publicly reachable
-   host.
-2. Generate a 32-byte hex key:
+По сравнению с upstream Exclave:
 
-   ```bash
-   openssl rand -hex 32
-   ```
+- **Новый тип профиля `olcRTC`** (`TYPE_OLCRTC = 30`) с собственной
+  preferences-страницей: Provider / Room ID / Pre-shared key (hex) / DNS
+- **Бридж к gomobile-биндингу olcRTC** — Java-обёртка над Go-библиотекой,
+  поднимается перед V2Ray, и V2Ray видит туннель как обычный SOCKS5-апстрим
+- **Объединённый AAR** (`library/core/main.go`): `dyhkwong/libsagernetcore` +
+  `Oleglog/olcrtc/mobile` упакованы в один `libsagernetcore.aar` —
+  один Go-runtime, один `libgojni.so` на ABI (без коллизии классов
+  `go.Seq`)
+- **Ребрендинг**: `applicationId = community.openlibre.olcrtc.android`,
+  app name = **olcRTC**, отдельный `release.keystore` (signing certificate
+  fingerprint отличается от upstream Exclave — поэтому **olcRTC** нельзя
+  поставить поверх установленного Exclave и наоборот, это намеренно)
+- **Локализация EN + RU**
 
-3. Pick a provider (`telemost`, `jazz`, or `wb_stream`) and a fresh `roomId`
-   for that provider (start a meeting in the chosen service and copy the
-   conference id from its URL).
-4. Run the server, for example with `docker-compose.server.yml` from the
-   olcrtc repo. Make sure it can reach the chosen TURN/ICE servers from
-   inside the container.
-5. Pass the same `keyHex` and `roomId` to the Android app.
+Все остальные протоколы Exclave (Shadowsocks, Trojan, Hysteria 2, VMess,
+VLESS, WireGuard, и т.д.) сохранены — в одно приложение можно положить любую
+комбинацию профилей.
 
-## Setting up the Android app
+### Установка APK
 
-1. Install `olcRTC-*-arm64-v8a.apk` from the release page.
-2. Open the app, go to *Add new profile* → **olcRTC**.
-3. Fill:
-   - *Provider*: `telemost`, `jazz`, or `wb_stream`.
-   - *Room ID*: same value as on the server.
-   - *Key (hex)*: same 64-character hex string as on the server.
-   - *DNS server*: optional; falls back to the system resolver.
-4. Save the profile, set it as active, hit *Connect*.
-5. The first connection takes up to ~15 s while the WebRTC peer connection is
-   negotiated; subsequent reconnects are faster.
+1. Скачай `olcRTC-<version>-arm64-v8a.apk` из
+   [GitHub Releases](https://github.com/Oleglog/Exclave_FORK/releases).
+   Для большинства современных Android-устройств это правильный вариант.
+   Для старых 32-бит — `armeabi-v7a`. Для эмулятора — `x86_64`.
 
-## Building from source
+2. Поставь APK. Android попросит разрешения на установку из неизвестных
+   источников — разреши **только** для устанавливающего приложения
+   (Chrome / файловый менеджер).
 
-Requirements:
+3. **Не ставь** одновременно с обычным Exclave — у форка свой signing
+   certificate, конфликт при апгрейде. Либо так, либо так.
 
-- JDK 21
-- Android SDK Platform 36, Build-Tools 37.0.0
-- Android NDK r29 (29.0.14206865)
-- Go 1.25 + `gomobile` (only required to rebuild `libsagernetcore.aar`)
+### Настройка профиля
+
+Перед настройкой убедись, что у тебя есть **развёрнутый olcRTC-сервер**
+(см. [Oleglog/olcrtc_FORK](https://github.com/Oleglog/olcrtc_FORK#быстрый-старт-сервер-на-vps)).
+После установки сервера ты получишь три значения:
+
+- **Provider** (`wb_stream` / `jazz` / `telemost`)
+- **Room ID**
+- **Encryption key** (64-символьный hex)
+
+В приложении:
+
+1. Открой **olcRTC** → нажми **+** в правом нижнем углу → **olcRTC**
+2. Заполни:
+   - **Profile name** — любое читаемое имя (например, `My VPS`)
+   - **Provider** — то же что на сервере
+   - **Room ID** — то же что на сервере
+   - **Pre-shared key (hex)** — те же 64 символа
+   - **DNS server** — оставь пустым (использует системный DNS) или укажи
+     `1.1.1.1:53` / `8.8.8.8:53` если есть проблемы с резолвом провайдера
+3. Сохрани (галочка вверху)
+4. Нажми на профиль → правый нижний угол **Connect** (значок самолётика).
+   Android запросит разрешение на VPN — разреши
+
+Первое подключение занимает ~10–15 секунд (WebRTC-сессия + ICE-переговоры).
+Повторные подключения быстрее.
+
+### Проверка
+
+Открой в браузере [https://2ip.ru](https://2ip.ru) или
+[https://api.ipify.org](https://api.ipify.org). Должен показать IP **твоего
+VPS**, а не твоего мобильного оператора. Если показывает оператора —
+туннель не поднялся, посмотри логи (см. ниже).
+
+### Отладка
+
+В приложении: **Меню → Logs**. Сообщения от olcRTC-клиента отмечены тегом
+`OlcRTC` (или `mobile.Mobile.*`). Что искать:
+
+- `WB Stream/Jazz/Telemost room joined` — провайдерская регистрация прошла,
+  подключение к SFU установлено
+- `peer connected` — есть связь с сервером
+- `i/o timeout` / `connection refused` — провайдер недоступен с устройства,
+  либо нет сети
+- `signature mismatch` / `decrypt error` — ключи не совпадают, проверь, что
+  скопировал key в точности (без пробелов/переносов)
+
+На сервере: `sudo journalctl -u olcrtc-server -f`. После твоего подключения
+должна появиться строка `Peer 0 connected`. Если её нет — клиент не дошёл
+до сервера, ищи проблему в провайдере или в сети устройства.
+
+Самая частая причина "ничего не работает" — несовпадение Provider / Room ID
+/ Key между сервером (`/etc/olcrtc/env`) и приложением. Сравни буквально
+посимвольно.
+
+### Сборка из исходников
+
+#### Требования
+
+| Инструмент    | Версия                                | Зачем                       |
+|---------------|---------------------------------------|-----------------------------|
+| JDK           | 21                                    | Gradle / Kotlin             |
+| Android SDK   | Platform 36, Build-Tools 37.0.0      | сборка APK                  |
+| Android NDK   | r29 (29.0.14206865)                   | нативные библиотеки V2Ray   |
+| Go            | 1.25+                                 | сборка `libsagernetcore.aar`|
+| `gomobile`    | latest                                | gomobile bind               |
+
+Установка `gomobile`:
 
 ```bash
-# 1. Build the merged Go AAR (libsagernetcore + olcrtc/mobile)
-bin/lib/core/build.sh
+go install golang.org/x/mobile/cmd/gomobile@latest
+gomobile init
+```
 
-# 2. Assemble the debug APK
+Не забудь выставить переменные окружения:
+
+```bash
+export ANDROID_HOME=~/Android/Sdk           # или ANDROID_SDK_ROOT
+export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865
+```
+
+#### Сборка
+
+```bash
+git clone https://github.com/Oleglog/Exclave_FORK
+cd Exclave_FORK
+
+# 1. Собрать объединённый Go AAR (libsagernetcore + olcrtc/mobile)
+bin/lib/core/build.sh
+# или эквивалентно:
+./run lib core
+
+# 2. Собрать debug APK
 ./gradlew :app:assembleOssDebug
 
-# 3. Assemble the signed release APK (uses release.keystore + the
-#    KEYSTORE_PASS / ALIAS_NAME / ALIAS_PASS values in local.properties)
+# 3. Собрать подписанный release APK
 ./gradlew :app:assembleOssRelease
 ```
 
-APKs land in `app/build/outputs/apk/oss/{debug,release}/`.
+APK окажутся в `app/build/outputs/apk/oss/{debug,release}/` —
+по одному на каждое ABI (`arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`).
 
-## Why a single AAR
+#### Подпись релизной сборки
 
-Both the upstream v2ray-based `libsagernetcore` and `olcrtc/mobile` are
-gomobile bindings, and gomobile produces an AAR with its own
-`go.*` Java classes plus a `libgojni.so` per ABI. Two such AARs in the same
-APK collide:
+В корне репозитория лежит `release.keystore` (отдельный от upstream
+Exclave). Пароли передавай через `local.properties`:
+
+```
+KEYSTORE_PASS=...
+ALIAS_NAME=...
+ALIAS_PASS=...
+```
+
+либо через переменные окружения с теми же именами. Без них сборка
+подпишется debug-ключом.
+
+#### Версионирование
+
+Версии и applicationId зашиты в [`version.properties`](version.properties):
+
+```
+PACKAGE_NAME=community.openlibre.olcrtc.android
+VERSION_NAME=0.17.37-olcrtc.3
+VERSION_CODE=350
+```
+
+`VERSION_CODE` умножается ×5 при сборке — по 1 коду на каждое из 4 ABI плюс
+universal slot.
+
+### Структура репозитория (важное)
+
+```
+Exclave_FORK/
+├── app/                              # Android-приложение (Kotlin/Java)
+│   └── src/main/java/.../sagernet/
+│       ├── fmt/olcrtc/OlcRTCBean.java          # модель профиля (Kryo)
+│       ├── ui/profile/OlcRTCSettingsActivity   # preferences UI
+│       └── bg/proto/OlcRTCInstance.kt          # бридж к gomobile-биндингу
+├── library/
+│   └── core/                         # Go-источник AAR
+│       ├── main.go                   # импорт libsagernetcore + olcrtc/mobile
+│       └── build.sh                  # gomobile bind
+├── bin/                              # билд-скрипты
+│   ├── build.sh                      # ./gradlew :app:assembleOssRelease
+│   └── lib/core/build.sh             # билд AAR
+├── plugin/                           # NaiveProxy / ShadowQuic плагины
+└── version.properties                # PACKAGE_NAME / VERSION_NAME / VERSION_CODE
+```
+
+### Почему один AAR
+
+Upstream `libsagernetcore` (V2Ray) и `olcrtc/mobile` оба собраны через
+`gomobile bind`. У каждого получится свой AAR с собственными `go.*`
+Java-классами и `libgojni.so` на ABI. Если положить два таких AAR в один
+APK — Gradle упадёт:
 
 ```
 Duplicate class go.Seq found in modules libsagernetcore.aar and olcrtc.aar
 ```
 
-The fix in this fork is to import `github.com/openlibrecommunity/olcrtc/mobile`
-into the same Go module that produces `libsagernetcore.aar` and to call
-`gomobile bind` with both packages on the command line. The result is a
-single AAR that exports both `libsagernetcore.*` and `mobile.*` Java
-packages and a single `libgojni.so` per ABI.
+Решение в этом форке — импортировать `github.com/openlibrecommunity/olcrtc/mobile`
+в тот же Go-модуль, что и `libsagernetcore`, и звать `gomobile bind` с
+обоими пакетами на командной строке. Получается один AAR, экспортирующий
+и `libsagernetcore.*`, и `mobile.*`, и единственный `libgojni.so` на ABI.
+
+См. `library/core/main.go` и `library/core/build.sh`.
+
+### Безопасность и приватность
+
+- Бинарник olcRTC и сама приложение работают в одном процессе; нет отдельного
+  daemon
+- Encryption key — 32 байта (64 hex), используется для шифрования полезной
+  нагрузки в DataChannel; детали — в [olcrtc_FORK README](https://github.com/Oleglog/olcrtc_FORK)
+- Сорцы открыты, можно собрать APK самостоятельно и сравнить fingerprint с
+  релизной сборкой через `apksigner verify --print-certs`
+- В debug-логе могут оказаться секреты (Room ID, ключ) — стирай их перед
+  публикацией баг-репортов
+
+### Лицензия
+
+GPLv3 (унаследовано от Exclave). См. также `LICENSE` и `NOTICE.md`.
+
+---
+
+## English
+
+### What this is
+
+Android app with an embedded olcRTC client. You create a profile of type
+**olcRTC**, fill in Provider / Room ID / Encryption Key, tap *Connect* —
+the app starts a local SOCKS5 listener, points Android's VpnService at it,
+and tunnels everything through a WebRTC DataChannel to your VPS, exiting
+with the VPS's IP.
+
+```
+[Android apps]
+       │
+       ▼
+[Exclave VpnService]
+       │
+       ▼
+[local SOCKS5 :2080]
+       │
+       ▼
+[olcRTC client]
+       │
+       ▼ WebRTC DataChannel (UDP)
+[Russian conferencing SFU — telemost.yandex.ru / wb_stream / jazz.sber.ru]
+       ▲
+       │ WebRTC DataChannel (UDP)
+       │
+[olcRTC server on your VPS abroad]
+       │
+       ▼
+[Internet]
+```
+
+### What this fork adds vs. upstream Exclave
+
+- **New profile type `olcRTC`** (`TYPE_OLCRTC = 30`) with full preferences UI
+  (Provider, Room ID, Pre-shared key, DNS)
+- **gomobile bridge** (`bg/proto/OlcRTCInstance.kt`) wrapping the Go olcRTC
+  mobile binding; V2Ray treats the running tunnel as a plain SOCKS5 upstream
+- **Combined AAR** (`library/core/main.go`) packing both
+  `dyhkwong/libsagernetcore` and `Oleglog/olcrtc/mobile` into a single
+  `libsagernetcore.aar` — one Go runtime, one `libgojni.so` per ABI (avoids
+  the `go.Seq` class collision)
+- **Rebrand**: `applicationId = community.openlibre.olcrtc.android`,
+  app name = **olcRTC**, fresh release keystore (signing certificate
+  fingerprint differs from upstream Exclave — **the app cannot be installed
+  on top of an existing Exclave install** and vice versa, intentionally)
+- **EN + RU localization**
+
+All upstream Exclave protocols (Shadowsocks, Trojan, Hysteria 2, VMess,
+VLESS, WireGuard, etc.) are preserved — you can mix any of them with olcRTC
+profiles in the same install.
+
+### Install the APK
+
+1. Download `olcRTC-<version>-arm64-v8a.apk` from
+   [GitHub Releases](https://github.com/Oleglog/Exclave_FORK/releases).
+   Use `armeabi-v7a` for old 32-bit devices, `x86_64` for emulators.
+
+2. Install. Android will prompt about unknown-source installation — allow
+   it for the installer app only (Chrome / file manager).
+
+3. **Don't install alongside upstream Exclave** — different signing
+   certificates, so they conflict. One or the other.
+
+### Profile setup
+
+You need an **olcRTC server already running on a VPS** before this is useful.
+See [Oleglog/olcrtc_FORK quick start](https://github.com/Oleglog/olcrtc_FORK#quick-start-server-on-vps).
+The installer prints three values:
+
+- **Provider** (`wb_stream` / `jazz` / `telemost`)
+- **Room ID**
+- **Encryption key** (64-char hex)
+
+In the app:
+
+1. **olcRTC** → **+** → **olcRTC**
+2. Fill:
+   - **Profile name** — any readable name
+   - **Provider** — match the server
+   - **Room ID** — match the server
+   - **Pre-shared key (hex)** — exact 64 chars
+   - **DNS server** — leave blank (use system DNS) or set `1.1.1.1:53` /
+     `8.8.8.8:53` if you have provider DNS issues
+3. Save (top-right checkmark)
+4. Tap the profile → press **Connect** (paper-plane icon, bottom-right)
+5. Approve Android's VPN permission prompt
+
+First connection takes ~10–15 s (WebRTC negotiation + ICE). Reconnects are
+faster.
+
+### Verify
+
+Open https://2ip.ru or https://api.ipify.org in a browser. The IP shown
+should be your **VPS**, not your mobile carrier. If it's the carrier, the
+tunnel didn't come up — check logs.
+
+### Troubleshooting
+
+App side: **Menu → Logs**. olcRTC-client messages are tagged `OlcRTC` (or
+`mobile.Mobile.*`). What to look for:
+
+- `WB Stream/Jazz/Telemost room joined` — provider registration succeeded
+- `peer connected` — link to server is up
+- `i/o timeout` / `connection refused` — provider unreachable from the
+  device, or no network
+- `signature mismatch` / `decrypt error` — keys don't match, recopy
+
+Server side: `sudo journalctl -u olcrtc-server -f`. After your device
+connects, you should see `Peer 0 connected`. If you don't, the client never
+made it to the server — check provider connectivity / device network.
+
+The most common "nothing works" cause is mismatched Provider / Room ID /
+Key between server (`/etc/olcrtc/env`) and app. Compare character by
+character.
+
+### Build from source
+
+#### Requirements
+
+| Tool          | Version                              | Purpose                     |
+|---------------|--------------------------------------|-----------------------------|
+| JDK           | 21                                   | Gradle / Kotlin             |
+| Android SDK   | Platform 36, Build-Tools 37.0.0     | APK assembly                |
+| Android NDK   | r29 (29.0.14206865)                  | native V2Ray libs           |
+| Go            | 1.25+                                | build `libsagernetcore.aar` |
+| `gomobile`    | latest                               | gomobile bind               |
+
+Install `gomobile`:
+
+```bash
+go install golang.org/x/mobile/cmd/gomobile@latest
+gomobile init
+```
+
+Set env:
+
+```bash
+export ANDROID_HOME=~/Android/Sdk           # or ANDROID_SDK_ROOT
+export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865
+```
+
+#### Build
+
+```bash
+git clone https://github.com/Oleglog/Exclave_FORK
+cd Exclave_FORK
+
+# 1. Build the merged Go AAR (libsagernetcore + olcrtc/mobile)
+bin/lib/core/build.sh
+# or:
+./run lib core
+
+# 2. Debug APK
+./gradlew :app:assembleOssDebug
+
+# 3. Signed release APK
+./gradlew :app:assembleOssRelease
+```
+
+APKs land in `app/build/outputs/apk/oss/{debug,release}/`, one per ABI.
+
+#### Release signing
+
+`release.keystore` lives in the repo root (separate from upstream Exclave).
+Provide passwords via `local.properties`:
+
+```
+KEYSTORE_PASS=...
+ALIAS_NAME=...
+ALIAS_PASS=...
+```
+
+or env vars of the same names. Without them, the build is signed with the
+debug key.
+
+#### Version bumping
+
+Edit [`version.properties`](version.properties):
+
+```
+PACKAGE_NAME=community.openlibre.olcrtc.android
+VERSION_NAME=0.17.37-olcrtc.3
+VERSION_CODE=350
+```
+
+`VERSION_CODE` is multiplied ×5 during assembly — one slot per ABI plus a
+universal slot.
+
+### Repository layout (key files)
+
+```
+Exclave_FORK/
+├── app/                              # Android app (Kotlin/Java)
+│   └── src/main/java/.../sagernet/
+│       ├── fmt/olcrtc/OlcRTCBean.java          # profile model (Kryo)
+│       ├── ui/profile/OlcRTCSettingsActivity   # preferences UI
+│       └── bg/proto/OlcRTCInstance.kt          # bridge to gomobile binding
+├── library/
+│   └── core/                         # Go source for the AAR
+│       ├── main.go                   # imports libsagernetcore + olcrtc/mobile
+│       └── build.sh                  # gomobile bind
+├── bin/                              # build scripts
+│   ├── build.sh                      # ./gradlew :app:assembleOssRelease
+│   └── lib/core/build.sh             # build AAR
+├── plugin/                           # NaiveProxy / ShadowQuic plugins
+└── version.properties                # PACKAGE_NAME / VERSION_NAME / VERSION_CODE
+```
+
+### Why a single AAR
+
+Both upstream `libsagernetcore` (V2Ray) and `olcrtc/mobile` are gomobile
+bindings. Each produces an AAR with its own `go.*` Java classes and a
+`libgojni.so` per ABI. Two such AARs in the same APK collide:
+
+```
+Duplicate class go.Seq found in modules libsagernetcore.aar and olcrtc.aar
+```
+
+The fix in this fork: import `github.com/openlibrecommunity/olcrtc/mobile`
+into the same Go module that builds `libsagernetcore`, and call
+`gomobile bind` with both packages. Result: one AAR exporting both
+`libsagernetcore.*` and `mobile.*` Java packages, single `libgojni.so` per
+ABI.
 
 See `library/core/main.go` and `library/core/build.sh`.
 
-## Licenses
+### Security & privacy
 
-- This fork inherits **GNU GPLv3** from Exclave (`./LICENSE`).
-- olcrtc itself is **WTFPL**, which is GPLv3-compatible.
-- See the upstream `README.md` for the v2ray / SagerNet credit chain.
+- olcRTC runtime and the app run in the same process; no separate daemon
+- Encryption key is 32 bytes (64 hex), used to encrypt the DataChannel
+  payload (details in the [olcrtc_FORK README](https://github.com/Oleglog/olcrtc_FORK))
+- All sources are open; you can build the APK yourself and compare the
+  signing certificate fingerprint with releases via
+  `apksigner verify --print-certs`
+- Debug logs may contain secrets (Room ID, key) — strip before posting
+  public bug reports
 
-## Acknowledgements
+### License
 
-- [dyhkwong/Exclave](https://github.com/dyhkwong/Exclave) — base proxy client.
-- [openlibrecommunity/olcrtc](https://github.com/openlibrecommunity/olcrtc) —
-  WebRTC tunnel server and Go client.
+GPLv3 (inherited from Exclave). See `LICENSE` and `NOTICE.md`.
+
+### Acknowledgements
+
+- [dyhkwong/Exclave](https://github.com/dyhkwong/Exclave) — base proxy
+  client
+- [openlibrecommunity/olcrtc](https://github.com/openlibrecommunity/olcrtc)
+  — original olcRTC project (this fork's server lives at
+  [Oleglog/olcrtc_FORK](https://github.com/Oleglog/olcrtc_FORK))
 - [SagerNet](https://github.com/SagerNet/SagerNet) — original Android proxy
-  framework Exclave is forked from.
+  framework Exclave is forked from
