@@ -36,6 +36,7 @@ import io.nekohasekai.sagernet.fmt.V2rayBuildResult
 import io.nekohasekai.sagernet.fmt.buildV2RayConfig
 import io.nekohasekai.sagernet.fmt.naive.NaiveBean
 import io.nekohasekai.sagernet.fmt.naive.buildNaiveConfig
+import io.nekohasekai.sagernet.fmt.olcrtc.OLCRTCBean
 import io.nekohasekai.sagernet.fmt.shadowquic.ShadowQUICBean
 import io.nekohasekai.sagernet.fmt.shadowquic.buildShadowQUICConfig
 import io.nekohasekai.sagernet.ktx.*
@@ -98,6 +99,9 @@ abstract class V2RayInstance(
                                 }
                             }
                         )
+                    }
+                    is OLCRTCBean -> {
+                        externalInstances[port] = OLCRTCExternalInstance(bean, port, username, password)
                     }
                 }
             }

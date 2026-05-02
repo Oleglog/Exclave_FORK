@@ -172,6 +172,14 @@
     <string name="unsaved_changes_prompt">Есть несохранённые изменения. Сохранить\?</string>
     <string name="ss_cat">Настройки Shadowsocks</string>
     <string name="proxy_cat">Настройки сервера</string>
+    <string name="olcrtc_advanced_cat">Дополнительно</string>
+    <string name="olcrtc_provider">Провайдер</string>
+    <string name="olcrtc_room_id">ID комнаты</string>
+    <string name="olcrtc_room_id_summary">Числовой ID комнаты, выданный администратором olcRTC-сервера (например, путь из https://telemost.yandex.ru/j/&lt;ID&gt;).</string>
+    <string name="olcrtc_key_hex">Общий ключ (hex)</string>
+    <string name="olcrtc_key_hex_summary">64-символьный hex-ключ, выданный администратором olcRTC-сервера.</string>
+    <string name="olcrtc_dns_server">DNS-сервер</string>
+    <string name="olcrtc_dns_server_summary">DNS-сервер, используемый клиентом olcRTC для разрешения адресов провайдеров (например, 1.1.1.1:53).</string>
     <string name="plugin_unknown">Неизвестный плагин %s</string>
     <string name="plugin_disabled">Отключено</string>
     <string name="plugin_configure">Настроить…</string>

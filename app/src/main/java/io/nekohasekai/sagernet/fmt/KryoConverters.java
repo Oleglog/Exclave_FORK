@@ -39,6 +39,7 @@ import io.nekohasekai.sagernet.fmt.internal.ConfigBean;
 import io.nekohasekai.sagernet.fmt.juicity.JuicityBean;
 import io.nekohasekai.sagernet.fmt.mieru.MieruBean;
 import io.nekohasekai.sagernet.fmt.naive.NaiveBean;
+import io.nekohasekai.sagernet.fmt.olcrtc.OLCRTCBean;
 import io.nekohasekai.sagernet.fmt.shadowquic.ShadowQUICBean;
 import io.nekohasekai.sagernet.fmt.shadowsocks.ShadowsocksBean;
 import io.nekohasekai.sagernet.fmt.shadowsocksr.ShadowsocksRBean;
@@ -194,6 +195,12 @@ public class KryoConverters {
     public static TrustTunnelBean trusttunnelDeserialize(byte[] bytes) {
         if (bytes == null || bytes.length == 0) return null;
         return deserialize(new TrustTunnelBean(), bytes);
+    }
+
+    @TypeConverter
+    public static OLCRTCBean olcrtcDeserialize(byte[] bytes) {
+        if (bytes == null || bytes.length == 0) return null;
+        return deserialize(new OLCRTCBean(), bytes);
     }
 
     @TypeConverter
