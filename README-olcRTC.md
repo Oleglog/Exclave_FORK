@@ -110,6 +110,43 @@ VLESS, WireGuard, и т.д.) сохранены — в одно приложен
 Первое подключение занимает ~10–15 секунд (WebRTC-сессия + ICE-переговоры).
 Повторные подключения быстрее.
 
+### Импорт профиля
+
+Вместо ручного заполнения полей можно импортировать готовый профиль через файл или QR.
+
+**Формат JSON** (файл с расширением `.json`):
+
+```json
+{
+  "version": 1,
+  "type": "olcrtc",
+  "name": "My VPS",
+  "provider": "telemost",
+  "room_id": "abc123",
+  "key_hex": "64-символьный hex-ключ",
+  "dns_server": "1.1.1.1:53"
+}
+```
+
+Поля `name` и `dns_server` — необязательны. Допустимые значения `provider`:
+`telemost`, `jazz`, `wb_stream`.
+
+**Формат URI** (кодируется в QR):
+
+```
+olcrtc://<provider>@room/<room_id>?key=<key_hex>#<name>
+```
+
+**Как импортировать:**
+
+- **Через файл:** нажми **+** → **Import from file** → выбери `.json`
+- **Через QR:** нажми **+** → **Scan QR code** → направь камеру
+- **Из стороннего приложения:** открой `.json` → «Поделиться» → выбери **olcRTC**
+
+**Как поделиться своим профилем:**
+
+Открой профиль → меню (три точки) → **QR code** → покажи QR или скопируй URI.
+
 ### Проверка
 
 Открой в браузере [https://2ip.ru](https://2ip.ru) или
@@ -261,6 +298,16 @@ Duplicate class go.Seq found in modules libsagernetcore.aar and olcrtc.aar
 - В debug-логе могут оказаться секреты (Room ID, ключ) — стирай их перед
   публикацией баг-репортов
 
+### Благодарности
+
+- [dyhkwong/Exclave](https://github.com/dyhkwong/Exclave) — базовый прокси-клиент
+- [openlibrecommunity/olcrtc](https://github.com/openlibrecommunity/olcrtc)
+  — оригинальный проект olcRTC (серверная часть этого форка —
+  [Oleglog/olcrtc_FORK](https://github.com/Oleglog/olcrtc_FORK))
+- [SagerNet](https://github.com/SagerNet/SagerNet) — оригинальный Android
+  прокси-фреймворк, от которого форкнут Exclave
+- [@juushimatsu](https://github.com/juushimatsu)
+
 ### Лицензия
 
 GPLv3 (унаследовано от Exclave). См. также `LICENSE` и `NOTICE.md`.
@@ -358,6 +405,44 @@ In the app:
 
 First connection takes ~10–15 s (WebRTC negotiation + ICE). Reconnects are
 faster.
+
+### Import profile
+
+Instead of typing the fields manually you can import a ready-made profile
+from a file or QR code.
+
+**JSON format** (file with `.json` extension):
+
+```json
+{
+  "version": 1,
+  "type": "olcrtc",
+  "name": "My VPS",
+  "provider": "telemost",
+  "room_id": "abc123",
+  "key_hex": "64-char hex key",
+  "dns_server": "1.1.1.1:53"
+}
+```
+
+`name` and `dns_server` are optional. Valid `provider` values:
+`telemost`, `jazz`, `wb_stream`.
+
+**URI format** (encoded in QR):
+
+```
+olcrtc://<provider>@room/<room_id>?key=<key_hex>#<name>
+```
+
+**How to import:**
+
+- **From file:** tap **+** → **Import from file** → pick the `.json`
+- **From QR:** tap **+** → **Scan QR code** → point camera
+- **From another app:** open the `.json` → Share → choose **olcRTC**
+
+**How to share your profile:**
+
+Open the profile → overflow menu → **QR code** → show the QR or copy the URI.
 
 ### Verify
 
@@ -519,3 +604,4 @@ GPLv3 (inherited from Exclave). See `LICENSE` and `NOTICE.md`.
   [Oleglog/olcrtc_FORK](https://github.com/Oleglog/olcrtc_FORK))
 - [SagerNet](https://github.com/SagerNet/SagerNet) — original Android proxy
   framework Exclave is forked from
+- [@juushimatsu](https://github.com/juushimatsu)

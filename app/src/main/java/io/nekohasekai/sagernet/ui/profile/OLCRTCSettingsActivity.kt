@@ -19,15 +19,27 @@
 
 package io.nekohasekai.sagernet.ui.profile
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.os.Bundle
+import android.view.Menu
+import android.view.MenuItem
+import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceFragmentCompat
 import io.nekohasekai.sagernet.Key
 import io.nekohasekai.sagernet.R
 import io.nekohasekai.sagernet.database.DataStore
 import io.nekohasekai.sagernet.fmt.olcrtc.OLCRTCBean
+import io.nekohasekai.sagernet.fmt.olcrtc.toUri
+import io.nekohasekai.sagernet.widget.QRCodeDialog
 
 class OLCRTCSettingsActivity : ProfileSettingsActivity<OLCRTCBean>() {
+
+    companion object {
+        private const val MENU_SHARE_QR = 1001
+        private const val MENU_SHARE_CLIPBOARD = 1002
+    }
 
     override fun createEntity() = OLCRTCBean()
 
@@ -49,6 +61,47 @@ class OLCRTCSettingsActivity : ProfileSettingsActivity<OLCRTCBean>() {
         // initializeDefaultValues will set safe defaults.
         serverAddress = "olcrtc"
         serverPort = 1
+    }
+
+    private fun buildCurrentUri(): String? {
+        return try {
+            OLCRTCBean().apply { serialize() }.toUri()
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        val result = super.onCreateOptionsMenu(menu)
+        menu.add(Menu.NONE, MENU_SHARE_QR, Menu.NONE, R.string.share_qr_nfc)
+        menu.add(Menu.NONE, MENU_SHARE_CLIPBOARD, Menu.NONE, R.string.action_export_clipboard)
+        return result
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            MENU_SHARE_QR -> {
+                val uri = buildCurrentUri()
+                if (uri != null) {
+                    QRCodeDialog(uri).showAllowingStateLoss(supportFragmentManager)
+                } else {
+                    Toast.makeText(this, R.string.action_import_err, Toast.LENGTH_SHORT).show()
+                }
+                true
+            }
+            MENU_SHARE_CLIPBOARD -> {
+                val uri = buildCurrentUri()
+                if (uri != null) {
+                    val clipboard = getSystemService(ClipboardManager::class.java)
+                    clipboard.setPrimaryClip(ClipData.newPlainText("olcRTC URI", uri))
+                    Toast.makeText(this, R.string.action_export_msg, Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, R.string.action_import_err, Toast.LENGTH_SHORT).show()
+                }
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
     }
 
     override fun PreferenceFragmentCompat.createPreferences(

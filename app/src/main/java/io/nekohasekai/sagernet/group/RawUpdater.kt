@@ -31,6 +31,7 @@ import io.nekohasekai.sagernet.database.SagerDatabase
 import io.nekohasekai.sagernet.database.SubscriptionBean
 import io.nekohasekai.sagernet.fmt.AbstractBean
 import io.nekohasekai.sagernet.fmt.shadowsocks.parseShadowsocksConfig
+import io.nekohasekai.sagernet.fmt.olcrtc.parseOLCRTCJson
 import io.nekohasekai.sagernet.fmt.wireguard.parseWireGuardConfig
 import io.nekohasekai.sagernet.ktx.*
 import libsagernetcore.Libsagernetcore
@@ -237,6 +238,11 @@ object RawUpdater : GroupUpdater() {
 
     @Suppress("UNCHECKED_CAST")
     fun parseRaw(text: String): List<AbstractBean>? {
+        if (text.trimStart().startsWith("{")) {
+            runCatching {
+                return listOf(parseOLCRTCJson(text))
+            }
+        }
         try {
             val options = DumperOptions()
             val yaml = Yaml(YAMLConstructor(LoaderOptions()), Representer(options), options, object : Resolver() {

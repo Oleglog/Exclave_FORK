@@ -33,6 +33,7 @@ import io.nekohasekai.sagernet.fmt.shadowsocks.parseShadowsocks
 import io.nekohasekai.sagernet.fmt.shadowsocksr.parseShadowsocksR
 import io.nekohasekai.sagernet.fmt.socks.parseSOCKS
 import io.nekohasekai.sagernet.fmt.ssh.parseSSH
+import io.nekohasekai.sagernet.fmt.olcrtc.parseOLCRTC
 import io.nekohasekai.sagernet.fmt.trusttunnel.parseTrustTunnel
 import io.nekohasekai.sagernet.fmt.tuic5.parseTuic
 import io.nekohasekai.sagernet.fmt.v2ray.parseV2Ray
@@ -136,6 +137,10 @@ fun parseShareLinks(text: String): List<AbstractBean> {
         } else if (startsWith("tt://", ignoreCase = true)) {
             runCatching {
                 entities.addAll(parseTrustTunnel(this))
+            }
+        } else if (startsWith("olcrtc://", ignoreCase = true)) {
+            runCatching {
+                entities.add(parseOLCRTC(this))
             }
         }
     }
