@@ -63,7 +63,14 @@ class OLCRTCExternalInstance(
         })
         Mobile.setDebug(BuildConfig.DEBUG)
 
-        Mobile.start(bean.roomId, bean.keyHex, port.toLong(), username, password)
+        Mobile.startWithProvider(
+            bean.provider.ifBlank { OLCRTCBean.PROVIDER_TELEMOST },
+            bean.roomId,
+            bean.keyHex,
+            port.toLong(),
+            username,
+            password,
+        )
         try {
             Mobile.waitReady(15_000L)
         } catch (e: Exception) {
