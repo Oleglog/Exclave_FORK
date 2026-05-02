@@ -1,13 +1,23 @@
 # olcRTC for Android (fork of Exclave)
 
-> This is a fork of [dyhkwong/Exclave](https://github.com/dyhkwong/Exclave) that
-> integrates [openlibrecommunity/olcrtc](https://github.com/openlibrecommunity/olcrtc)
-> as a first-class proxy type. See [`README-olcRTC.md`](./README-olcRTC.md) for
-> setup, server provisioning, and build-from-source instructions specific to
-> this fork. The original Exclave README follows below for reference.
+> **Android-клиент для [olcRTC](https://github.com/Oleglog/olcrtc_FORK)** —
+> туннеля, прячущего трафик внутри WebRTC-сессий публичных российских
+> видеоконференций (Wildberries Stream / Yandex Telemost / SaluteJazz).
 >
-> Pre-built APKs:
-> [GitHub releases](https://github.com/Oleglog/Exclave_FORK/releases).
+> **Android client for [olcRTC](https://github.com/Oleglog/olcrtc_FORK)** —
+> a tunnel hiding traffic inside WebRTC sessions of public Russian video-
+> conferencing services (Wildberries Stream / Yandex Telemost / SaluteJazz).
+>
+> Подробная документация по форку, гайд по серверу, сборке APK и
+> использованию: **[`README-olcRTC.md`](./README-olcRTC.md)** (RU + EN).
+>
+> Полные настройки сервера: [Oleglog/olcrtc_FORK](https://github.com/Oleglog/olcrtc_FORK).
+>
+> Готовые APK: [GitHub releases](https://github.com/Oleglog/Exclave_FORK/releases)
+> (нужен `olcRTC-<version>-arm64-v8a.apk` для большинства телефонов).
+>
+> Этот форк основан на [dyhkwong/Exclave](https://github.com/dyhkwong/Exclave),
+> upstream README которого приведён ниже для справки.
 
 ---
 
@@ -49,101 +59,42 @@ It is a fork of the archived Android proxy client SagerNet and uses a custom ove
 
 ## Download
 
-- Exclave
+[![GitHub releases](https://img.shields.io/badge/-GitHub%20Releases-7B68EE.svg?style=flat-square&logo=github)](https://github.com/dyhkwong/Exclave/releases)
 
-  [Download from GitHub releases](https://github.com/dyhkwong/Exclave/releases)
+## Build
 
-  [Download from F-Droid](https://f-droid.org/packages/com.github.dyhkwong.sagernet)
-
-  SHA-256 hash of the signing certificate: `e9fe39e1ce254c50c2f9470a757b378c0b7cc536119867f7691405b592e6994b`
-
-- NaïveProxy Plugin
-
-  [Download from GitHub releases](https://github.com/klzgrad/naiveproxy/releases)
-
-  It is distributed and signed by the upstream author.
-
-Starting in September 2026, Google will [block apps from "sideloading"](https://developer.android.com/developer-verification) on [certified Android devices](https://www.android.com/certified/partners/). If you are a user who values digital freedom, we need your voice to [express opposition](https://keepandroidopen.org/). Your support will not only help save this app, but also help defend software freedom and open distribution.
-
-## Explanation of terms
-
-[Exclave wiki](https://github.com/dyhkwong/Exclave/wiki). It contains some subjective comments. Viewer discretion is advised.
+[![Workflow status](https://img.shields.io/github/actions/workflow/status/dyhkwong/Exclave/build.yml?branch=dev&style=flat-square)](https://github.com/dyhkwong/Exclave/actions/workflows/build.yml?query=branch%3Adev) [![Latest commit on dev branch](https://img.shields.io/github/last-commit/dyhkwong/Exclave/dev?style=flat-square)](https://github.com/dyhkwong/Exclave/tree/dev)
 
 ## Translation
 
-Is Exclave not in your language, or the translation is incorrect or incomplete? Get involved in the translations on [Hosted Weblate](https://hosted.weblate.org/projects/exclave/).
+[![Translation status](https://hosted.weblate.org/widget/exclave/multi-auto.svg)](https://hosted.weblate.org/engage/exclave/)
 
-## Issue tracker
+[Hosted Weblate](https://hosted.weblate.org/projects/exclave/)
 
-Please report bugs and submit feature requests [here](https://github.com/dyhkwong/Exclave/issues). Do not report to v2ray-core as this project has heavily modified the code of v2ray-core.
+## Issues
 
-- Before creating a new issue, please search for existing ones. Do not create duplicate issues.
-- Old versions are not supported. Please ensure that you are using the latest version.
-- For crashes, log file using "debug" log level is required. The log file may contain the secret keys used to connect to your servers. Please remove potential sensitive information before posting them publicly.
-- For memory leak and high system resource usage, pprof profile is required. Long press "About" - "Version" to enable pprof HTTP server settings and kill and restart the app to take effect.
-- Encrypt with [this GPG public key](https://github.com/dyhkwong.gpg) if the issue contains sensitive information or you are reporting a vulnerability.
-- Because of the legacy codebase, feature requests are likely not accepted.
+Old versions are not supported. Please ensure you are using the latest version.
 
-## Discussion
+Crash reports require debug-level logs.
 
-- Public [discussions](https://github.com/dyhkwong/Exclave/discussions) are always preferred because they can be viewed by everyone.
-- Private [chat group](https://t.me/s/exclavian).
-
-## Code contribution
-
-- Create a [pull request](https://github.com/dyhkwong/Exclave/pulls) to contribute code. New features needs prior communications in the issue tracker, while bug fixes does not.
+[Encrypt the report files with the following GPG public key.](https://github.com/dyhkwong.gpg)
 
 ## License
 
-    Copyright (C) 2023  dyhkwong
-    Copyright (C) 2021 by nekohasekai <contact-sagernet@sekai.icu>
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-## Notice
-
-Exclave is licensed under the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. However, Exclave optionally incorporates code covered by the GNU General Public License as published by the Free Software Foundation, version 3. If `github.com/dyhkwong/libsagernetcore` is compiled with `with_clash` tag, the GNU General Public License as published by the Free Software Foundation, version 3, applies to all of Exclave.
-
-## Build from source
-
-- Install and configure JDK 21, Go 1.25 and Go Mobile.
-- Install and configure Android SDK Platform 36 and 37.0, Android SDK Build-Tools 37.0.0, Android SDK Platform-Tools and Android NDK r29 through Android Studio or Android SDK Command-line Tools.
-- Replace `release.keystore` with your own. It can be generated with Java `keytool`.
-- Create a new `local.properties` file if it does not exist. Append the following lines to `local.properties`.
 ```
-    KEYSTORE_PASS=your_keystore_pass
-    ALIAS_NAME=your_alias_name
-    ALIAS_PASS=your_alias_pass
+Copyright (C) 2023  dyhkwong
+Copyright (C) 2021 by nekohasekai <contact-sagernet@sekai.icu>
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ```
-
-- Linux (x64) or macOS (x64/arm64):
-
-  - Build libsagernetcore: `./run lib core` or `./library/core/build.sh`
-  - Download assets: `./gradlew :app:downloadAssets`, or update assets to the latest version: `./gradlew :app:updateAssets`
-  - Build Exclave: `./gradlew :app:assembleOssRelease`
-
-- Windows (x64):
-
-  - Build libsagernetcore: `./library/core/build.bat`
-  - Download assets: `./gradlew.bat :app:downloadAssets`, or update assets to the latest version: `./gradlew.bat :app:updateAssets`
-  - Build Exclave: `./gradlew.bat :app:assembleOssRelease`
-
-- APK files are located in `./app/build/outputs/apk/oss/release`
-
-## Acknowledgment
-
-- [Shadowsocks](https://github.com/shadowsocks/shadowsocks-android)
-- [SagerNet](https://github.com/SagerNet/SagerNet)
-- [husi](https://github.com/xchacha20-poly1305/husi)
-- Other forks of SagerNet
