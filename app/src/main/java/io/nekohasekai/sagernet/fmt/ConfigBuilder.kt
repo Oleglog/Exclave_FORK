@@ -645,8 +645,15 @@ fun buildV2RayConfig(
 
                     if (proxyEntity.needExternal()) {
                         val localPort = mkPort()
-                        val username = Uuid.generateV4().toHexString()
-                        val password = Uuid.generateV4().toHexString()
+                        // olcrtc's local SOCKS5 listener does not enforce
+                        // credentials (the upstream client.RunWithReady
+                        // discards user/pass), so V2Ray must talk to it with
+                        // method=NO_AUTH. For other external proxies (Naive,
+                        // ShadowQUIC) we keep generated credentials so the
+                        // local listener can authenticate the loopback caller.
+                        val isOLCRTC = proxyEntity.olcrtcBean != null
+                        val username = if (isOLCRTC) "" else Uuid.generateV4().toHexString()
+                        val password = if (isOLCRTC) "" else Uuid.generateV4().toHexString()
                         chainMap[Triple(localPort, username, password)] = proxyEntity
                         currentOutbound.apply {
                             protocol = "socks"
@@ -654,10 +661,12 @@ fun buildV2RayConfig(
                                 servers = listOf(SocksOutboundConfigurationObject.ServerObject().apply {
                                     address = LOCALHOST
                                     port = localPort
-                                    users = listOf(SocksOutboundConfigurationObject.ServerObject.UserObject().apply {
-                                        user = username
-                                        pass = password
-                                    })
+                                    if (!isOLCRTC) {
+                                        users = listOf(SocksOutboundConfigurationObject.ServerObject.UserObject().apply {
+                                            user = username
+                                            pass = password
+                                        })
+                                    }
                                 })
                                 if (proxyEntity.naiveBean != null && proxyEntity.naiveBean!!.singUoT && DataStore.experimentalFlagsProperties.getBooleanProperty( "singuot")) {
                                     uot = true
