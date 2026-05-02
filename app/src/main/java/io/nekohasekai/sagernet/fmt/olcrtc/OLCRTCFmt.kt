@@ -1,5 +1,6 @@
 package io.nekohasekai.sagernet.fmt.olcrtc
 
+import io.nekohasekai.sagernet.ktx.queryParameter
 import libsagernetcore.Libsagernetcore
 import org.json.JSONObject
 

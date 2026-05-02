@@ -32,6 +32,7 @@ import io.nekohasekai.sagernet.R
 import io.nekohasekai.sagernet.database.DataStore
 import io.nekohasekai.sagernet.fmt.olcrtc.OLCRTCBean
 import io.nekohasekai.sagernet.fmt.olcrtc.toUri
+import io.nekohasekai.sagernet.ktx.showAllowingStateLoss
 import io.nekohasekai.sagernet.widget.QRCodeDialog
 
 class OLCRTCSettingsActivity : ProfileSettingsActivity<OLCRTCBean>() {
