@@ -360,6 +360,18 @@
         <item>quic</item>
     </string-array>
 
+    <string-array name="olcrtc_provider_entry">
+        <item>Yandex Telemost</item>
+        <item>SaluteJazz</item>
+        <item>Wildberries Stream</item>
+    </string-array>
+
+    <string-array name="olcrtc_provider_value">
+        <item>telemost</item>
+        <item>jazz</item>
+        <item>wb_stream</item>
+    </string-array>
+
     <string-array name="config_type_entry">
         <item>V2Ray</item>
         <item>V2Ray Outbound</item>

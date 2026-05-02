@@ -25,4 +25,9 @@ import (
 	// and https://github.com/golang/go/issues/73097. As a workaround, bind
 	// a remote module (`gomobile bind "example.com/module"`) instead.
 	_ "github.com/dyhkwong/libsagernetcore"
+	// Pull olcrtc/mobile into the same gomobile-bound AAR so that a single
+	// libgojni.so backs both libsagernetcore and the olcrtc client. Building
+	// olcrtc as a separate AAR produces a duplicate Go runtime (libgojni.so
+	// + go.* classes) which Android refuses to package together.
+	_ "github.com/openlibrecommunity/olcrtc/mobile"
 )

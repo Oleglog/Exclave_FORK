@@ -4,6 +4,10 @@
 -keep class io.nekohasekai.sagernet.** { *;}
 -keep class com.v2ray.core.app.observatory.** { *; }
 
+# olcrtc gomobile bindings
+-keep class mobile.** { *; }
+-keep class go.** { *; }
+
 # SnakeYaml
 -keep class org.yaml.snakeyaml.** { *; }
 

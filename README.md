@@ -1,3 +1,16 @@
+# olcRTC for Android (fork of Exclave)
+
+> This is a fork of [dyhkwong/Exclave](https://github.com/dyhkwong/Exclave) that
+> integrates [openlibrecommunity/olcrtc](https://github.com/openlibrecommunity/olcrtc)
+> as a first-class proxy type. See [`README-olcRTC.md`](./README-olcRTC.md) for
+> setup, server provisioning, and build-from-source instructions specific to
+> this fork. The original Exclave README follows below for reference.
+>
+> Pre-built APKs:
+> [GitHub releases](https://github.com/Oleglog/Exclave_FORK/releases).
+
+---
+
 # Exclave
 
 Exclave is a proxy client.

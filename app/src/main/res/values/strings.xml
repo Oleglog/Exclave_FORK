@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">Exclave</string>
+    <string name="app_name" translatable="false">olcRTC</string>
     <string name="project">Project</string>
     <string name="github">Source code</string>
     <string name="app_version">Version</string>
@@ -262,6 +262,14 @@
     <string name="plugin_disabled">Disabled</string>
     <string name="plugin_unknown">Unknown plugin: %s</string>
     <string name="proxy_cat">Server settings</string>
+    <string name="olcrtc_advanced_cat">Advanced</string>
+    <string name="olcrtc_provider">Provider</string>
+    <string name="olcrtc_room_id">Room ID</string>
+    <string name="olcrtc_room_id_summary">Numeric room ID issued by your olcRTC server admin (the path part of e.g. https://telemost.yandex.ru/j/&lt;ID&gt;).</string>
+    <string name="olcrtc_key_hex">Pre-shared key (hex)</string>
+    <string name="olcrtc_key_hex_summary">64-character hexadecimal pre-shared key issued by the olcRTC server.</string>
+    <string name="olcrtc_dns_server">DNS server</string>
+    <string name="olcrtc_dns_server_summary">DNS server used by the olcRTC client to resolve provider hosts (e.g. 1.1.1.1:53).</string>
     <string name="ss_cat">Shadowsocks settings</string>
     <string name="unsaved_changes_prompt">Changes are not saved. Do you want to save?</string>
     <string name="apply">Apply</string>

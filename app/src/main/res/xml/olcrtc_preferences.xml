@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <EditTextPreference
+        app:icon="@drawable/ic_social_emoji_symbols"
+        app:key="profileName"
+        app:title="@string/profile_name"
+        app:useSimpleSummaryProvider="true" />
+
+    <PreferenceCategory app:title="@string/proxy_cat">
+
+        <io.nekohasekai.sagernet.widget.SimpleMenuPreference
+            android:layout_height="match_parent"
+            app:defaultValue="telemost"
+            app:entries="@array/olcrtc_provider_entry"
+            app:entryValues="@array/olcrtc_provider_value"
+            app:icon="@drawable/ic_baseline_layers_24"
+            app:key="serverOlcrtcProvider"
+            app:title="@string/olcrtc_provider"
+            app:useSimpleSummaryProvider="true" />
+
+        <EditTextPreference
+            app:icon="@drawable/ic_hardware_router"
+            app:key="serverOlcrtcRoomId"
+            app:summary="@string/olcrtc_room_id_summary"
+            app:title="@string/olcrtc_room_id" />
+
+        <EditTextPreference
+            app:dialogLayout="@layout/layout_password_dialog"
+            app:icon="@drawable/ic_settings_password"
+            app:key="serverOlcrtcKeyHex"
+            app:summary="@string/olcrtc_key_hex_summary"
+            app:title="@string/olcrtc_key_hex" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/olcrtc_advanced_cat">
+
+        <EditTextPreference
+            app:icon="@drawable/ic_action_dns"
+            app:key="serverOlcrtcDnsServer"
+            app:summary="@string/olcrtc_dns_server_summary"
+            app:title="@string/olcrtc_dns_server"
+            app:useSimpleSummaryProvider="true" />
+
+    </PreferenceCategory>
+
+</PreferenceScreen>
