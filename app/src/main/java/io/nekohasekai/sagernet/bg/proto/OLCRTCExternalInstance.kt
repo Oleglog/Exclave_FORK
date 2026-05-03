@@ -63,8 +63,25 @@ class OLCRTCExternalInstance(
         })
         Mobile.setDebug(BuildConfig.DEBUG)
 
-        Mobile.startWithProvider(
-            bean.provider.ifBlank { OLCRTCBean.PROVIDER_TELEMOST },
+        val carrier = when (bean.provider) {
+            "wb_stream" -> "wbstream"
+            else -> bean.provider.ifBlank { OLCRTCBean.PROVIDER_TELEMOST }
+        }
+        val transport = bean.transport.ifBlank { OLCRTCBean.TRANSPORT_DATACHANNEL }
+
+        Mobile.setTransport(transport)
+        Mobile.setLink("direct")
+
+        if (transport == OLCRTCBean.TRANSPORT_VP8CHANNEL) {
+            Mobile.setVP8Options(
+                bean.vp8Fps.toLong(),
+                bean.vp8BatchSize.toLong(),
+            )
+        }
+
+        Mobile.startWithTransport(
+            carrier,
+            transport,
             bean.roomId,
             bean.keyHex,
             port.toLong(),

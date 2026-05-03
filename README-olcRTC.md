@@ -1,15 +1,15 @@
 # olcRTC for Android
 
-[**Русский**](#русский) • [**English**](#english) • [**Сервер (olcrtc_FORK)**](https://github.com/Oleglog/olcrtc_FORK) • [**Releases**](https://github.com/Oleglog/Exclave_FORK/releases)
+[**Русский**](#русский) • [**English**](#english) • [**Сервер (Olcrtc_manager)**](https://github.com/Oleglog/Olcrtc_manager) • [**Releases**](https://github.com/Oleglog/Exclave_olcrtc/releases)
 
 A fork of [Exclave](https://github.com/dyhkwong/Exclave) that integrates
-[olcRTC](https://github.com/Oleglog/olcrtc_FORK) as a first-class proxy type.
-olcRTC tunnels TCP traffic over WebRTC through whitelisted Russian conferencing
+[olcRTC](https://github.com/Oleglog/Olcrtc_manager) as a first-class proxy type.
+olcRTC tunnels TCP traffic over WebRTC (datachannel / vp8channel / seichannel / videochannel) through whitelisted Russian conferencing
 services (Yandex Telemost, SaluteJazz, Wildberries Stream) so it cannot be
 blocked without breaking the upstream service.
 
 > This is the **client** side of olcRTC. The server side is a separate
-> repository — [Oleglog/olcrtc_FORK](https://github.com/Oleglog/olcrtc_FORK) —
+> repository — [Oleglog/Olcrtc_manager](https://github.com/Oleglog/Olcrtc_manager) —
 > and you need to deploy it to a VPS before this app is useful.
 
 ---
@@ -36,10 +36,10 @@ Android-приложение со встроенным olcRTC-клиентом. 
        ▼
 [olcRTC-клиент]
        │
-       ▼ WebRTC DataChannel (UDP)
-[SFU видеоконф-сервиса в РФ — telemost.yandex.ru / wb_stream / jazz.sber.ru]
+       ▼ WebRTC (datachannel / vp8channel / ...) (UDP)
+[SFU видеоконф-сервиса в РФ — telemost.yandex.ru / wbstream / jazz.sber.ru]
        ▲
-       │ WebRTC DataChannel (UDP)
+       │ WebRTC (datachannel / vp8channel / ...) (UDP)
        │
 [olcRTC-сервер на твоём VPS вне РФ]
        │
@@ -52,7 +52,7 @@ Android-приложение со встроенным olcRTC-клиентом. 
 По сравнению с upstream Exclave:
 
 - **Новый тип профиля `olcRTC`** (`TYPE_OLCRTC = 30`) с собственной
-  preferences-страницей: Provider / Room ID / Pre-shared key (hex) / DNS
+  preferences-страницей: Provider / Transport / Room ID / Pre-shared key (hex) / DNS / VP8 options
 - **Бридж к gomobile-биндингу olcRTC** — Java-обёртка над Go-библиотекой,
   поднимается перед V2Ray, и V2Ray видит туннель как обычный SOCKS5-апстрим
 - **Объединённый AAR** (`library/core/main.go`): `dyhkwong/libsagernetcore` +
@@ -72,7 +72,7 @@ VLESS, WireGuard, и т.д.) сохранены — в одно приложен
 ### Установка APK
 
 1. Скачай `olcRTC-<version>-arm64-v8a.apk` из
-   [GitHub Releases](https://github.com/Oleglog/Exclave_FORK/releases).
+   [GitHub Releases](https://github.com/Oleglog/Exclave_olcrtc/releases).
    Для большинства современных Android-устройств это правильный вариант.
    Для старых 32-бит — `armeabi-v7a`. Для эмулятора — `x86_64`.
 
@@ -86,10 +86,10 @@ VLESS, WireGuard, и т.д.) сохранены — в одно приложен
 ### Настройка профиля
 
 Перед настройкой убедись, что у тебя есть **развёрнутый olcRTC-сервер**
-(см. [Oleglog/olcrtc_FORK](https://github.com/Oleglog/olcrtc_FORK#быстрый-старт-сервер-на-vps)).
+(см. [Oleglog/Olcrtc_manager](https://github.com/Oleglog/Olcrtc_manager#быстрый-старт-сервер-на-vps)).
 После установки сервера ты получишь три значения:
 
-- **Provider** (`wb_stream` / `jazz` / `telemost`)
+- **Provider** (`wbstream` / `jazz` / `telemost`)
 - **Room ID**
 - **Encryption key** (64-символьный hex)
 
@@ -99,6 +99,7 @@ VLESS, WireGuard, и т.д.) сохранены — в одно приложен
 2. Заполни:
    - **Profile name** — любое читаемое имя (например, `My VPS`)
    - **Provider** — то же что на сервере
+   - **Transport** — по умолчанию `datachannel` (~6 МБ/с); также доступны `vp8channel`, `seichannel`, `videochannel`
    - **Room ID** — то же что на сервере
    - **Pre-shared key (hex)** — те же 64 символа
    - **DNS server** — оставь пустым (использует системный DNS) или укажи
@@ -122,19 +123,21 @@ VLESS, WireGuard, и т.д.) сохранены — в одно приложен
   "type": "olcrtc",
   "name": "My VPS",
   "provider": "telemost",
+  "transport": "datachannel",
   "room_id": "abc123",
   "key_hex": "64-символьный hex-ключ",
   "dns_server": "1.1.1.1:53"
 }
 ```
 
-Поля `name` и `dns_server` — необязательны. Допустимые значения `provider`:
-`telemost`, `jazz`, `wb_stream`.
+Поля `name`, `transport` и `dns_server` — необязательны. Допустимые значения `provider`:
+`telemost`, `jazz`, `wbstream`. Допустимые значения `transport`:
+`datachannel` (по умолчанию), `vp8channel`, `seichannel`, `videochannel`.
 
 **Формат URI** (кодируется в QR):
 
 ```
-olcrtc://<provider>@room/<room_id>?key=<key_hex>#<name>
+olcrtc://<carrier>@room/<room_id>?key=<key_hex>&transport=<transport>#<name>
 ```
 
 **Как импортировать:**
@@ -204,7 +207,7 @@ export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865
 #### Сборка
 
 ```bash
-git clone https://github.com/Oleglog/Exclave_FORK
+git clone https://github.com/Oleglog/Exclave_olcrtc
 cd Exclave_FORK
 
 # 1. Собрать объединённый Go AAR (libsagernetcore + olcrtc/mobile)
@@ -242,8 +245,8 @@ ALIAS_PASS=...
 
 ```
 PACKAGE_NAME=community.openlibre.olcrtc.android
-VERSION_NAME=0.17.37-olcrtc.3
-VERSION_CODE=350
+VERSION_NAME=0.17.37-olcrtc.5
+VERSION_CODE=352
 ```
 
 `VERSION_CODE` умножается ×5 при сборке — по 1 коду на каждое из 4 ABI плюс
@@ -292,7 +295,7 @@ Duplicate class go.Seq found in modules libsagernetcore.aar and olcrtc.aar
 - Бинарник olcRTC и сама приложение работают в одном процессе; нет отдельного
   daemon
 - Encryption key — 32 байта (64 hex), используется для шифрования полезной
-  нагрузки в DataChannel; детали — в [olcrtc_FORK README](https://github.com/Oleglog/olcrtc_FORK)
+  нагрузки в DataChannel; детали — в [olcrtc_FORK README](https://github.com/Oleglog/Olcrtc_manager)
 - Сорцы открыты, можно собрать APK самостоятельно и сравнить fingerprint с
   релизной сборкой через `apksigner verify --print-certs`
 - В debug-логе могут оказаться секреты (Room ID, ключ) — стирай их перед
@@ -303,7 +306,7 @@ Duplicate class go.Seq found in modules libsagernetcore.aar and olcrtc.aar
 - [dyhkwong/Exclave](https://github.com/dyhkwong/Exclave) — базовый прокси-клиент
 - [openlibrecommunity/olcrtc](https://github.com/openlibrecommunity/olcrtc)
   — оригинальный проект olcRTC (серверная часть этого форка —
-  [Oleglog/olcrtc_FORK](https://github.com/Oleglog/olcrtc_FORK))
+  [Oleglog/Olcrtc_manager](https://github.com/Oleglog/Olcrtc_manager))
 - [SagerNet](https://github.com/SagerNet/SagerNet) — оригинальный Android
   прокси-фреймворк, от которого форкнут Exclave
 - [@juushimatsu](https://github.com/juushimatsu)
@@ -336,10 +339,10 @@ with the VPS's IP.
        ▼
 [olcRTC client]
        │
-       ▼ WebRTC DataChannel (UDP)
-[Russian conferencing SFU — telemost.yandex.ru / wb_stream / jazz.sber.ru]
+       ▼ WebRTC (datachannel / vp8channel / ...) (UDP)
+[Russian conferencing SFU — telemost.yandex.ru / wbstream / jazz.sber.ru]
        ▲
-       │ WebRTC DataChannel (UDP)
+       │ WebRTC (datachannel / vp8channel / ...) (UDP)
        │
 [olcRTC server on your VPS abroad]
        │
@@ -350,7 +353,7 @@ with the VPS's IP.
 ### What this fork adds vs. upstream Exclave
 
 - **New profile type `olcRTC`** (`TYPE_OLCRTC = 30`) with full preferences UI
-  (Provider, Room ID, Pre-shared key, DNS)
+  (Provider, Transport, Room ID, Pre-shared key, DNS, VP8 options)
 - **gomobile bridge** (`bg/proto/OlcRTCInstance.kt`) wrapping the Go olcRTC
   mobile binding; V2Ray treats the running tunnel as a plain SOCKS5 upstream
 - **Combined AAR** (`library/core/main.go`) packing both
@@ -370,7 +373,7 @@ profiles in the same install.
 ### Install the APK
 
 1. Download `olcRTC-<version>-arm64-v8a.apk` from
-   [GitHub Releases](https://github.com/Oleglog/Exclave_FORK/releases).
+   [GitHub Releases](https://github.com/Oleglog/Exclave_olcrtc/releases).
    Use `armeabi-v7a` for old 32-bit devices, `x86_64` for emulators.
 
 2. Install. Android will prompt about unknown-source installation — allow
@@ -382,10 +385,10 @@ profiles in the same install.
 ### Profile setup
 
 You need an **olcRTC server already running on a VPS** before this is useful.
-See [Oleglog/olcrtc_FORK quick start](https://github.com/Oleglog/olcrtc_FORK#quick-start-server-on-vps).
+See [Oleglog/Olcrtc_manager quick start](https://github.com/Oleglog/Olcrtc_manager#quick-start-server-on-vps).
 The installer prints three values:
 
-- **Provider** (`wb_stream` / `jazz` / `telemost`)
+- **Provider** (`wbstream` / `jazz` / `telemost`)
 - **Room ID**
 - **Encryption key** (64-char hex)
 
@@ -395,6 +398,7 @@ In the app:
 2. Fill:
    - **Profile name** — any readable name
    - **Provider** — match the server
+   - **Transport** — default `datachannel` (~6 MB/s); also `vp8channel`, `seichannel`, `videochannel`
    - **Room ID** — match the server
    - **Pre-shared key (hex)** — exact 64 chars
    - **DNS server** — leave blank (use system DNS) or set `1.1.1.1:53` /
@@ -419,19 +423,21 @@ from a file or QR code.
   "type": "olcrtc",
   "name": "My VPS",
   "provider": "telemost",
+  "transport": "datachannel",
   "room_id": "abc123",
   "key_hex": "64-char hex key",
   "dns_server": "1.1.1.1:53"
 }
 ```
 
-`name` and `dns_server` are optional. Valid `provider` values:
-`telemost`, `jazz`, `wb_stream`.
+`name`, `transport` and `dns_server` are optional. Valid `provider` values:
+`telemost`, `jazz`, `wbstream`. Valid `transport` values:
+`datachannel` (default), `vp8channel`, `seichannel`, `videochannel`.
 
 **URI format** (encoded in QR):
 
 ```
-olcrtc://<provider>@room/<room_id>?key=<key_hex>#<name>
+olcrtc://<carrier>@room/<room_id>?key=<key_hex>&transport=<transport>#<name>
 ```
 
 **How to import:**
@@ -498,7 +504,7 @@ export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865
 #### Build
 
 ```bash
-git clone https://github.com/Oleglog/Exclave_FORK
+git clone https://github.com/Oleglog/Exclave_olcrtc
 cd Exclave_FORK
 
 # 1. Build the merged Go AAR (libsagernetcore + olcrtc/mobile)
@@ -535,8 +541,8 @@ Edit [`version.properties`](version.properties):
 
 ```
 PACKAGE_NAME=community.openlibre.olcrtc.android
-VERSION_NAME=0.17.37-olcrtc.3
-VERSION_CODE=350
+VERSION_NAME=0.17.37-olcrtc.5
+VERSION_CODE=352
 ```
 
 `VERSION_CODE` is multiplied ×5 during assembly — one slot per ABI plus a
@@ -584,7 +590,7 @@ See `library/core/main.go` and `library/core/build.sh`.
 
 - olcRTC runtime and the app run in the same process; no separate daemon
 - Encryption key is 32 bytes (64 hex), used to encrypt the DataChannel
-  payload (details in the [olcrtc_FORK README](https://github.com/Oleglog/olcrtc_FORK))
+  payload (details in the [olcrtc_FORK README](https://github.com/Oleglog/Olcrtc_manager))
 - All sources are open; you can build the APK yourself and compare the
   signing certificate fingerprint with releases via
   `apksigner verify --print-certs`
@@ -601,7 +607,7 @@ GPLv3 (inherited from Exclave). See `LICENSE` and `NOTICE.md`.
   client
 - [openlibrecommunity/olcrtc](https://github.com/openlibrecommunity/olcrtc)
   — original olcRTC project (this fork's server lives at
-  [Oleglog/olcrtc_FORK](https://github.com/Oleglog/olcrtc_FORK))
+  [Oleglog/Olcrtc_manager](https://github.com/Oleglog/Olcrtc_manager))
 - [SagerNet](https://github.com/SagerNet/SagerNet) — original Android proxy
   framework Exclave is forked from
 - [@juushimatsu](https://github.com/juushimatsu)

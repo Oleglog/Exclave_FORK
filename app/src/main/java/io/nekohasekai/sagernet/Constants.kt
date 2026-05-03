@@ -248,9 +248,12 @@ object Key {
     const val SERVER_SHADOWQUIC_USE_SUNNYQUIC = "serverShadowQUICUseSunnyQUIC"
 
     const val SERVER_OLCRTC_PROVIDER = "serverOlcrtcProvider"
+    const val SERVER_OLCRTC_TRANSPORT = "serverOlcrtcTransport"
     const val SERVER_OLCRTC_ROOM_ID = "serverOlcrtcRoomId"
     const val SERVER_OLCRTC_KEY_HEX = "serverOlcrtcKeyHex"
     const val SERVER_OLCRTC_DNS_SERVER = "serverOlcrtcDnsServer"
+    const val SERVER_OLCRTC_VP8_FPS = "serverOlcrtcVp8Fps"
+    const val SERVER_OLCRTC_VP8_BATCH_SIZE = "serverOlcrtcVp8BatchSize"
 
     const val SERVER_SING_UOT_CATEGORY = "serverSingUotCategory"
     const val SERVER_SING_MUX_CATEGORY = "serverSingMuxCategory"

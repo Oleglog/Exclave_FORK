@@ -47,19 +47,23 @@ class OLCRTCSettingsActivity : ProfileSettingsActivity<OLCRTCBean>() {
     override fun OLCRTCBean.init() {
         DataStore.profileName = name
         DataStore.serverOlcrtcProvider = provider
+        DataStore.serverOlcrtcTransport = transport
         DataStore.serverOlcrtcRoomId = roomId
         DataStore.serverOlcrtcKeyHex = keyHex
         DataStore.serverOlcrtcDnsServer = dnsServer
+        DataStore.serverOlcrtcVp8Fps = vp8Fps
+        DataStore.serverOlcrtcVp8BatchSize = vp8BatchSize
     }
 
     override fun OLCRTCBean.serialize() {
         name = DataStore.profileName
         provider = DataStore.serverOlcrtcProvider.ifEmpty { OLCRTCBean.PROVIDER_TELEMOST }
+        transport = DataStore.serverOlcrtcTransport.ifEmpty { OLCRTCBean.TRANSPORT_DATACHANNEL }
         roomId = DataStore.serverOlcrtcRoomId
         keyHex = DataStore.serverOlcrtcKeyHex
         dnsServer = DataStore.serverOlcrtcDnsServer.ifEmpty { "1.1.1.1:53" }
-        // serverAddress / serverPort are not user-configurable for olcRTC;
-        // initializeDefaultValues will set safe defaults.
+        vp8Fps = DataStore.serverOlcrtcVp8Fps
+        vp8BatchSize = DataStore.serverOlcrtcVp8BatchSize
         serverAddress = "olcrtc"
         serverPort = 1
     }

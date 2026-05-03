@@ -1,19 +1,19 @@
 # olcRTC for Android (fork of Exclave)
 
-> **Android-клиент для [olcRTC](https://github.com/Oleglog/olcrtc_FORK)** —
+> **Android-клиент для [olcRTC](https://github.com/Oleglog/Olcrtc_manager)** —
 > туннеля, прячущего трафик внутри WebRTC-сессий публичных российских
 > видеоконференций (Wildberries Stream / Yandex Telemost / SaluteJazz).
 >
-> **Android client for [olcRTC](https://github.com/Oleglog/olcrtc_FORK)** —
+> **Android client for [olcRTC](https://github.com/Oleglog/Olcrtc_manager)** —
 > a tunnel hiding traffic inside WebRTC sessions of public Russian video-
 > conferencing services (Wildberries Stream / Yandex Telemost / SaluteJazz).
 >
 > Подробная документация по форку, гайд по серверу, сборке APK и
 > использованию: **[`README-olcRTC.md`](./README-olcRTC.md)** (RU + EN).
 >
-> Полные настройки сервера: [Oleglog/olcrtc_FORK](https://github.com/Oleglog/olcrtc_FORK).
+> Полные настройки сервера: [Oleglog/Olcrtc_manager](https://github.com/Oleglog/Olcrtc_manager).
 >
-> Готовые APK: [GitHub releases](https://github.com/Oleglog/Exclave_FORK/releases)
+> Готовые APK: [GitHub releases](https://github.com/Oleglog/Exclave_olcrtc/releases)
 > (нужен `olcRTC-<version>-arm64-v8a.apk` для большинства телефонов).
 >
 > Этот форк основан на [dyhkwong/Exclave](https://github.com/dyhkwong/Exclave),

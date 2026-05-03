@@ -380,9 +380,12 @@ object DataStore : OnPreferenceDataStoreChangeListener {
     var serverShadowQUICUseSunnyQUIC by profileCacheStore.boolean(Key.SERVER_SHADOWQUIC_USE_SUNNYQUIC)
 
     var serverOlcrtcProvider by profileCacheStore.string(Key.SERVER_OLCRTC_PROVIDER)
+    var serverOlcrtcTransport by profileCacheStore.string(Key.SERVER_OLCRTC_TRANSPORT)
     var serverOlcrtcRoomId by profileCacheStore.string(Key.SERVER_OLCRTC_ROOM_ID)
     var serverOlcrtcKeyHex by profileCacheStore.string(Key.SERVER_OLCRTC_KEY_HEX)
     var serverOlcrtcDnsServer by profileCacheStore.string(Key.SERVER_OLCRTC_DNS_SERVER)
+    var serverOlcrtcVp8Fps by profileCacheStore.stringToInt(Key.SERVER_OLCRTC_VP8_FPS)
+    var serverOlcrtcVp8BatchSize by profileCacheStore.stringToInt(Key.SERVER_OLCRTC_VP8_BATCH_SIZE)
     var serverSingUot by profileCacheStore.boolean(Key.SERVER_SING_UOT)
     var serverSingMux by profileCacheStore.boolean(Key.SERVER_SING_MUX)
     var serverSingMuxProtocol by profileCacheStore.string(Key.SERVER_SING_MUX_PROTOCOL)

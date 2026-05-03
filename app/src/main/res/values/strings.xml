@@ -268,6 +268,7 @@
     <string name="olcrtc_room_id_summary">Numeric room ID issued by your olcRTC server admin (the path part of e.g. https://telemost.yandex.ru/j/&lt;ID&gt;).</string>
     <string name="olcrtc_key_hex">Pre-shared key (hex)</string>
     <string name="olcrtc_key_hex_summary">64-character hexadecimal pre-shared key issued by the olcRTC server.</string>
+    <string name="olcrtc_transport">Transport</string>
     <string name="olcrtc_dns_server">DNS server</string>
     <string name="olcrtc_dns_server_summary">DNS server used by the olcRTC client to resolve provider hosts (e.g. 1.1.1.1:53).</string>
     <string name="ss_cat">Shadowsocks settings</string>

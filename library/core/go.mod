@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/dyhkwong/libsagernetcore v0.0.0-20260429200134-d0a86658ed4c
-	github.com/openlibrecommunity/olcrtc v0.0.0-20260430020124-125cc062d8ca
+	github.com/openlibrecommunity/olcrtc v0.0.0-20260503215120-15a41ac912e6
 )
 
 require (
@@ -48,6 +48,7 @@ require (
 	github.com/jxskiss/base62 v1.1.0 // indirect
 	github.com/klauspost/compress v1.18.4 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
+	github.com/klauspost/reedsolomon v1.13.3 // indirect
 	github.com/lithammer/shortuuid/v4 v4.2.0 // indirect
 	github.com/livekit/mageutil v0.0.0-20250511045019-0f1ff63f7731 // indirect
 	github.com/livekit/mediatransportutil v0.0.0-20251128105421-19c7a7b81c22 // indirect
@@ -56,6 +57,7 @@ require (
 	github.com/livekit/server-sdk-go/v2 v2.16.2 // indirect
 	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40 // indirect
 	github.com/magefile/mage v1.17.1 // indirect
+	github.com/makiuchi-d/gozxing v0.1.1 // indirect
 	github.com/metacubex/utls v1.8.4 // indirect
 	github.com/miekg/dns v1.1.72 // indirect
 	github.com/nats-io/nats.go v1.48.0 // indirect
@@ -78,6 +80,7 @@ require (
 	github.com/pion/turn/v4 v4.1.4 // indirect
 	github.com/pion/webrtc/v4 v4.2.11 // indirect
 	github.com/pires/go-proxyproto v0.12.0 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/puzpuzpuz/xsync/v3 v3.5.1 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.59.0 // indirect
@@ -93,13 +96,16 @@ require (
 	github.com/sagernet/sing-shadowtls v0.2.1-0.20250503051639-fcd445d33c11 // indirect
 	github.com/sagernet/smux v1.5.50-sing-box-mod.1 // indirect
 	github.com/seiflotfy/cuckoofilter v0.0.0-20240715131351-a2f2c23f1771 // indirect
+	github.com/tjfoc/gmsm v1.4.1 // indirect
 	github.com/twitchtv/twirp v8.1.3+incompatible // indirect
 	github.com/v2fly/BrowserBridge v0.0.0-20210430233438-0570fc1d7d08 // indirect
 	github.com/v2fly/ss-bloomring v0.0.0-20210312155135-28617310f63e // indirect
 	github.com/v2fly/struc v0.0.0-20241227015403-8e8fa1badfd6 // indirect
 	github.com/v2fly/v2ray-core/v5 v5.49.0 // indirect
 	github.com/wlynxg/anet v0.0.5 // indirect
-	github.com/xtaci/smux v1.5.15 // indirect
+	github.com/xtaci/kcp-go/v5 v5.6.72 // indirect
+	github.com/xtaci/smux v1.5.57 // indirect
+	github.com/zarazaex69/gr v0.0.0-20260430043628-45b595f4fef0 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect
 	go.opentelemetry.io/otel v1.40.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
@@ -117,8 +123,10 @@ require (
 	golang.org/x/text v0.36.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.44.0 // indirect
+	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
 	golang.zx2c4.com/wireguard v0.0.0-20250521234502-f333402bd9cb // indirect
+	google.golang.org/genproto v0.0.0-20260209200024-4cfbd4190f57 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260209200024-4cfbd4190f57 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260209200024-4cfbd4190f57 // indirect
 	google.golang.org/grpc v1.80.0 // indirect
@@ -126,10 +134,11 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gvisor.dev/gvisor v0.0.0-20250503011706-39ed1f5ac29c // indirect
 	lukechampine.com/blake3 v1.4.1 // indirect
+	rsc.io/qr v0.2.0 // indirect
 )
 
 replace (
-	github.com/openlibrecommunity/olcrtc => github.com/Oleglog/olcrtc_FORK v0.0.0-20260502112611-e2e7b004ccbf
+	github.com/openlibrecommunity/olcrtc => github.com/Oleglog/Olcrtc_manager v0.0.0-20260503215120-15a41ac912e6
 	github.com/v2fly/v2ray-core/v5 => github.com/dyhkwong/v2ray-core/v5 v5.49.1-0.20260429195609-fcaef408a887
 	gvisor.dev/gvisor => gvisor.dev/gvisor v0.0.0-20250429202743-3a608a52255d
 )

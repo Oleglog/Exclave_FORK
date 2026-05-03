@@ -33,12 +33,20 @@ public class OLCRTCBean extends AbstractBean {
 
     public static final String PROVIDER_TELEMOST = "telemost";
     public static final String PROVIDER_JAZZ = "jazz";
-    public static final String PROVIDER_WB_STREAM = "wb_stream";
+    public static final String PROVIDER_WB_STREAM = "wbstream";
+
+    public static final String TRANSPORT_DATACHANNEL = "datachannel";
+    public static final String TRANSPORT_VP8CHANNEL = "vp8channel";
+    public static final String TRANSPORT_SEICHANNEL = "seichannel";
+    public static final String TRANSPORT_VIDEOCHANNEL = "videochannel";
 
     public String provider;
+    public String transport;
     public String roomId;
     public String keyHex;
     public String dnsServer;
+    public int vp8Fps;
+    public int vp8BatchSize;
 
     @Override
     public void initializeDefaultValues() {
@@ -46,19 +54,26 @@ public class OLCRTCBean extends AbstractBean {
         if (serverPort == null || serverPort == 0) serverPort = 1;
         super.initializeDefaultValues();
         if (provider == null || provider.isEmpty()) provider = PROVIDER_TELEMOST;
+        if (transport == null || transport.isEmpty()) transport = TRANSPORT_DATACHANNEL;
         if (roomId == null) roomId = "";
         if (keyHex == null) keyHex = "";
         if (dnsServer == null || dnsServer.isEmpty()) dnsServer = "1.1.1.1:53";
+        if (vp8Fps <= 0) vp8Fps = 60;
+        if (vp8BatchSize <= 0) vp8BatchSize = 8;
     }
 
     @Override
     public void serialize(ByteBufferOutput output) {
-        output.writeInt(0);
+        output.writeInt(1);
         super.serialize(output);
         output.writeString(provider);
         output.writeString(roomId);
         output.writeString(keyHex);
         output.writeString(dnsServer);
+        // v1 fields:
+        output.writeString(transport);
+        output.writeInt(vp8Fps);
+        output.writeInt(vp8BatchSize);
     }
 
     @Override
@@ -69,6 +84,11 @@ public class OLCRTCBean extends AbstractBean {
         roomId = input.readString();
         keyHex = input.readString();
         dnsServer = input.readString();
+        if (version >= 1) {
+            transport = input.readString();
+            vp8Fps = input.readInt();
+            vp8BatchSize = input.readInt();
+        }
     }
 
     @Override
