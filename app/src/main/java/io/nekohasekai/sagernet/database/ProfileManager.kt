@@ -213,7 +213,7 @@ object ProfileManager {
                 RuleEntity(
                     enabled = true,
                     name = app.getString(R.string.route_bypass_domain, ruDisplay),
-                    domains = "geosite:category-ru",
+                    domains = "domain:ru",
                     outbound = -1
                 ), false
             )
