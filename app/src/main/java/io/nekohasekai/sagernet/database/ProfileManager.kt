@@ -202,6 +202,30 @@ object ProfileManager {
         var rules = SagerDatabase.rulesDao.allRules()
         if (rules.isEmpty() && !DataStore.rulesFirstCreate) {
             DataStore.rulesFirstCreate = true
+
+            // Russia bypass — enabled by default so RU sites/IPs are reachable
+            // directly without going through the proxy. Two separate rules
+            // because v2ray ANDs match conditions inside a single rule, but
+            // we want EITHER a Russian domain OR a Russian IP to trigger
+            // bypass.
+            val ruDisplay = Locale("ru", "RU").getDisplayCountry(Locale.getDefault())
+            createRule(
+                RuleEntity(
+                    enabled = true,
+                    name = app.getString(R.string.route_bypass_domain, ruDisplay),
+                    domains = "geosite:category-ru",
+                    outbound = -1
+                ), false
+            )
+            createRule(
+                RuleEntity(
+                    enabled = true,
+                    name = app.getString(R.string.route_bypass_ip, ruDisplay),
+                    ip = "geoip:ru",
+                    outbound = -1
+                ), false
+            )
+
             var country = Locale.getDefault().country.lowercase()
             var displayCountry = Locale.getDefault().displayCountry
             if (country in arrayOf(
@@ -215,7 +239,7 @@ object ProfileManager {
                         outbound = -1
                     ), false
                 )
-            } else {
+            } else if (country !in arrayOf("ru")) {
                 country = Locale.CHINA.country.lowercase()
                 displayCountry = Locale.CHINA.displayCountry
                 createRule(
@@ -232,13 +256,15 @@ object ProfileManager {
                     ), false
                 )
             }
-            createRule(
-                RuleEntity(
-                    name = app.getString(R.string.route_bypass_ip, displayCountry),
-                    ip = "geoip:$country",
-                    outbound = -1
-                ), false
-            )
+            if (country !in arrayOf("ru")) {
+                createRule(
+                    RuleEntity(
+                        name = app.getString(R.string.route_bypass_ip, displayCountry),
+                        ip = "geoip:$country",
+                        outbound = -1
+                    ), false
+                )
+            }
             createRule(
                 RuleEntity(
                     enabled = true,
