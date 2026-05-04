@@ -54,6 +54,7 @@ class OLCRTCSettingsActivity : ProfileSettingsActivity<OLCRTCBean>() {
         DataStore.serverOlcrtcVp8Fps = vp8Fps
         DataStore.serverOlcrtcVp8BatchSize = vp8BatchSize
         DataStore.serverOlcrtcKeepaliveInterval = keepaliveIntervalSec
+        DataStore.serverOlcrtcPeers = peers
     }
 
     override fun OLCRTCBean.serialize() {
@@ -66,6 +67,7 @@ class OLCRTCSettingsActivity : ProfileSettingsActivity<OLCRTCBean>() {
         vp8Fps = DataStore.serverOlcrtcVp8Fps
         vp8BatchSize = DataStore.serverOlcrtcVp8BatchSize
         keepaliveIntervalSec = DataStore.serverOlcrtcKeepaliveInterval.let { if (it <= 0) 15 else it }
+        peers = DataStore.serverOlcrtcPeers.coerceIn(1, 16).let { if (it <= 0) 1 else it }
         serverAddress = "olcrtc"
         serverPort = 1
     }

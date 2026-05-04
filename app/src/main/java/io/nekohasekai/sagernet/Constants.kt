@@ -255,6 +255,7 @@ object Key {
     const val SERVER_OLCRTC_VP8_FPS = "serverOlcrtcVp8Fps"
     const val SERVER_OLCRTC_VP8_BATCH_SIZE = "serverOlcrtcVp8BatchSize"
     const val SERVER_OLCRTC_KEEPALIVE_INTERVAL = "serverOlcrtcKeepaliveInterval"
+    const val SERVER_OLCRTC_PEERS = "serverOlcrtcPeers"
 
     const val SERVER_SING_UOT_CATEGORY = "serverSingUotCategory"
     const val SERVER_SING_MUX_CATEGORY = "serverSingMuxCategory"

@@ -73,6 +73,13 @@
             android:inputType="number"
             android:defaultValue="15" />
 
+        <EditTextPreference
+            app:key="serverOlcrtcPeers"
+            app:title="Peers (multipath)"
+            app:summary="Number of parallel PeerConnections (1=disabled, 1..16). Server must use the same value (OLCRTC_PEERS)."
+            android:inputType="number"
+            android:defaultValue="1" />
+
     </PreferenceCategory>
 
 </PreferenceScreen>

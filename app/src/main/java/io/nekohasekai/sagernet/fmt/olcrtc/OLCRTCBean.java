@@ -48,6 +48,7 @@ public class OLCRTCBean extends AbstractBean {
     public int vp8Fps;
     public int vp8BatchSize;
     public int keepaliveIntervalSec;
+    public int peers;
 
     @Override
     public void initializeDefaultValues() {
@@ -62,11 +63,13 @@ public class OLCRTCBean extends AbstractBean {
         if (vp8Fps <= 0) vp8Fps = 60;
         if (vp8BatchSize <= 0) vp8BatchSize = 8;
         if (keepaliveIntervalSec <= 0) keepaliveIntervalSec = 15;
+        if (peers <= 0) peers = 1;
+        if (peers > 16) peers = 16;
     }
 
     @Override
     public void serialize(ByteBufferOutput output) {
-        output.writeInt(2);
+        output.writeInt(3);
         super.serialize(output);
         output.writeString(provider);
         output.writeString(roomId);
@@ -78,6 +81,8 @@ public class OLCRTCBean extends AbstractBean {
         output.writeInt(vp8BatchSize);
         // v2 fields:
         output.writeInt(keepaliveIntervalSec);
+        // v3 fields:
+        output.writeInt(peers);
     }
 
     @Override
@@ -95,6 +100,9 @@ public class OLCRTCBean extends AbstractBean {
         }
         if (version >= 2) {
             keepaliveIntervalSec = input.readInt();
+        }
+        if (version >= 3) {
+            peers = input.readInt();
         }
     }
 

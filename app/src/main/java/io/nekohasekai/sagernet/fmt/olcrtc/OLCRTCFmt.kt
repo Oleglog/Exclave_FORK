@@ -36,6 +36,7 @@ fun parseOLCRTC(url: String): OLCRTCBean {
         vp8Fps = link.queryParameter("vp8_fps")?.toIntOrNull()?.takeIf { it > 0 } ?: 60
         vp8BatchSize = link.queryParameter("vp8_batch")?.toIntOrNull()?.takeIf { it > 0 } ?: 8
         keepaliveIntervalSec = link.queryParameter("keepalive")?.toIntOrNull() ?: 15
+        peers = link.queryParameter("peers")?.toIntOrNull()?.coerceIn(1, 16) ?: 1
         name = link.fragment ?: ""
 
         validate()
@@ -65,6 +66,9 @@ fun OLCRTCBean.toUri(): String {
         if (keepaliveIntervalSec > 0 && keepaliveIntervalSec != 15) {
             addQueryParameter("keepalive", keepaliveIntervalSec.toString())
         }
+        if (peers > 1) {
+            addQueryParameter("peers", peers.toString())
+        }
         if (name.isNotEmpty()) {
             fragment = name
         }
@@ -85,6 +89,7 @@ fun parseOLCRTCJson(text: String): OLCRTCBean {
         vp8Fps = json.optInt("vp8_fps", 60).takeIf { it > 0 } ?: 60
         vp8BatchSize = json.optInt("vp8_batch", 8).takeIf { it > 0 } ?: 8
         keepaliveIntervalSec = json.optInt("keepalive_interval_sec", 15)
+        peers = json.optInt("peers", 1).coerceIn(1, 16)
 
         validate()
     }

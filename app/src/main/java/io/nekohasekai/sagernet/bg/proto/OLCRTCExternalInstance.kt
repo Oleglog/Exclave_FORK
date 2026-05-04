@@ -92,6 +92,10 @@ class OLCRTCExternalInstance(
         Mobile.setTransport(transport)
         Mobile.setLink("direct")
 
+        val peerCount = bean.peers.coerceIn(1, 16).toLong()
+        Mobile.setPeers(peerCount)
+        Logs.d("[olcrtc] multipath peers=$peerCount")
+
         if (transport == OLCRTCBean.TRANSPORT_VP8CHANNEL) {
             Mobile.setVP8Options(
                 bean.vp8Fps.toLong(),
