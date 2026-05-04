@@ -35,6 +35,7 @@ fun parseOLCRTC(url: String): OLCRTCBean {
         transport = link.queryParameter("transport") ?: OLCRTCBean.TRANSPORT_DATACHANNEL
         vp8Fps = link.queryParameter("vp8_fps")?.toIntOrNull()?.takeIf { it > 0 } ?: 60
         vp8BatchSize = link.queryParameter("vp8_batch")?.toIntOrNull()?.takeIf { it > 0 } ?: 8
+        keepaliveIntervalSec = link.queryParameter("keepalive")?.toIntOrNull() ?: 15
         name = link.fragment ?: ""
 
         validate()
@@ -61,6 +62,9 @@ fun OLCRTCBean.toUri(): String {
         if (dnsServer.isNotEmpty() && dnsServer != "1.1.1.1:53") {
             addQueryParameter("dns", dnsServer)
         }
+        if (keepaliveIntervalSec > 0 && keepaliveIntervalSec != 15) {
+            addQueryParameter("keepalive", keepaliveIntervalSec.toString())
+        }
         if (name.isNotEmpty()) {
             fragment = name
         }
@@ -80,6 +84,7 @@ fun parseOLCRTCJson(text: String): OLCRTCBean {
         dnsServer = json.optString("dns_server", "1.1.1.1:53")
         vp8Fps = json.optInt("vp8_fps", 60).takeIf { it > 0 } ?: 60
         vp8BatchSize = json.optInt("vp8_batch", 8).takeIf { it > 0 } ?: 8
+        keepaliveIntervalSec = json.optInt("keepalive_interval_sec", 15)
 
         validate()
     }

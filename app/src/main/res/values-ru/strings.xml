@@ -181,6 +181,10 @@
     <string name="olcrtc_transport">Транспорт</string>
     <string name="olcrtc_dns_server">DNS-сервер</string>
     <string name="olcrtc_dns_server_summary">DNS-сервер, используемый клиентом olcRTC для разрешения адресов провайдеров (например, 1.1.1.1:53).</string>
+    <string name="olcrtc_keepalive_interval">Интервал keepalive (сек)</string>
+    <string name="olcrtc_keepalive_interval_summary">Отправлять пинг каждые N секунд, чтобы WebRTC-сессия не отваливалась (0 = отключено)</string>
+    <string name="export_olcrtc_log">Экспорт лога olcRTC</string>
+    <string name="copy_olcrtc_log">Копировать лог (без секретов)</string>
     <string name="plugin_unknown">Неизвестный плагин %s</string>
     <string name="plugin_disabled">Отключено</string>
     <string name="plugin_configure">Настроить…</string>

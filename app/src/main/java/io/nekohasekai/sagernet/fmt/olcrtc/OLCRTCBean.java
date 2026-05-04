@@ -47,6 +47,7 @@ public class OLCRTCBean extends AbstractBean {
     public String dnsServer;
     public int vp8Fps;
     public int vp8BatchSize;
+    public int keepaliveIntervalSec;
 
     @Override
     public void initializeDefaultValues() {
@@ -60,11 +61,12 @@ public class OLCRTCBean extends AbstractBean {
         if (dnsServer == null || dnsServer.isEmpty()) dnsServer = "1.1.1.1:53";
         if (vp8Fps <= 0) vp8Fps = 60;
         if (vp8BatchSize <= 0) vp8BatchSize = 8;
+        if (keepaliveIntervalSec <= 0) keepaliveIntervalSec = 15;
     }
 
     @Override
     public void serialize(ByteBufferOutput output) {
-        output.writeInt(1);
+        output.writeInt(2);
         super.serialize(output);
         output.writeString(provider);
         output.writeString(roomId);
@@ -74,6 +76,8 @@ public class OLCRTCBean extends AbstractBean {
         output.writeString(transport);
         output.writeInt(vp8Fps);
         output.writeInt(vp8BatchSize);
+        // v2 fields:
+        output.writeInt(keepaliveIntervalSec);
     }
 
     @Override
@@ -88,6 +92,9 @@ public class OLCRTCBean extends AbstractBean {
             transport = input.readString();
             vp8Fps = input.readInt();
             vp8BatchSize = input.readInt();
+        }
+        if (version >= 2) {
+            keepaliveIntervalSec = input.readInt();
         }
     }
 

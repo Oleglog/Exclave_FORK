@@ -66,6 +66,13 @@
             android:inputType="number"
             android:defaultValue="8" />
 
+        <EditTextPreference
+            app:key="serverOlcrtcKeepaliveInterval"
+            app:title="@string/olcrtc_keepalive_interval"
+            app:summary="@string/olcrtc_keepalive_interval_summary"
+            android:inputType="number"
+            android:defaultValue="15" />
+
     </PreferenceCategory>
 
 </PreferenceScreen>

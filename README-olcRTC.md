@@ -64,6 +64,12 @@ Android-приложение со встроенным olcRTC-клиентом. 
   fingerprint отличается от upstream Exclave — поэтому **olcRTC** нельзя
   поставить поверх установленного Exclave и наоборот, это намеренно)
 - **Локализация EN + RU**
+- **Автоматический реконнект** с экспоненциальным backoff (до 10 попыток,
+  1→2→4→8→16→30 с) при обрыве WebRTC-сессии
+- **Keepalive-пинг** — фоновый пинг через SOCKS каждые N секунд (настраивается
+  в UI, по умолчанию 15 с), удерживает сессию SFU при простое
+- **Экспорт логов olcRTC** — кнопка в Logs для экспорта/копирования
+  отфильтрованного лога с автоматическим удалением секретов (room_id, key_hex)
 
 Все остальные протоколы Exclave (Shadowsocks, Trojan, Hysteria 2, VMess,
 VLESS, WireGuard, и т.д.) сохранены — в одно приложение можно положить любую
@@ -365,6 +371,12 @@ with the VPS's IP.
   fingerprint differs from upstream Exclave — **the app cannot be installed
   on top of an existing Exclave install** and vice versa, intentionally)
 - **EN + RU localization**
+- **Auto-reconnect** with exponential backoff (up to 10 attempts,
+  1→2→4→8→16→30 s) when a WebRTC session drops
+- **Keepalive ping** — background ping through SOCKS every N seconds
+  (configurable in UI, default 15 s) to keep the SFU session alive during idle
+- **olcRTC log export** — button in Logs to export/copy filtered logs with
+  automatic secret redaction (room_id, key_hex)
 
 All upstream Exclave protocols (Shadowsocks, Trojan, Hysteria 2, VMess,
 VLESS, WireGuard, etc.) are preserved — you can mix any of them with olcRTC

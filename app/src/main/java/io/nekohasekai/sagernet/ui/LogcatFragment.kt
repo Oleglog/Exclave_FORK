@@ -18,10 +18,14 @@
 
 package io.nekohasekai.sagernet.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.view.*
+import android.widget.Toast
 import androidx.appcompat.widget.Toolbar
 import androidx.core.content.FileProvider
 import androidx.core.view.ViewCompat
@@ -34,6 +38,7 @@ import io.nekohasekai.sagernet.databinding.LayoutLogcatBinding
 import io.nekohasekai.sagernet.ktx.*
 import io.nekohasekai.sagernet.utils.ColorUtils
 import io.nekohasekai.sagernet.utils.CrashHandler
+import io.nekohasekai.sagernet.utils.OlcrtcLogSanitizer
 import java.io.BufferedReader
 import java.io.File
 import java.io.FileOutputStream
@@ -192,6 +197,68 @@ class LogcatFragment : ToolbarFragment(R.layout.layout_logcat),
                         )
                     )
                 }
+            }
+            R.id.action_export_olcrtc_log -> {
+                val context = requireContext()
+                runOnDefaultDispatcher {
+                    val logFile = File.createTempFile(
+                        "olcRTC-log-",
+                        ".txt",
+                        File(app.externalCacheDir, "log").also { it.mkdirs() }
+                    )
+
+                    val header = buildString {
+                        appendLine("=== olcRTC Log Export ===")
+                        appendLine("App: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+                        appendLine("Android: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
+                        appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL}")
+                        appendLine("Time: ${java.time.Instant.now()}")
+                        appendLine("========================")
+                        appendLine()
+                    }
+                    logFile.writeText(header)
+
+                    val tags = arrayOf(
+                        "Go:D", "v2ray-core:D", "libsagernetcore:D",
+                        "VpnService:D", "Exclave:D", "ProxyInstance:D",
+                        "GuardedProcessPool:D", "*:S"
+                    )
+                    try {
+                        val process = ProcessBuilder(
+                            listOf("logcat", "-d", "-v", "threadtime", "-s", tags.joinToString(","))
+                        ).start()
+                        process.inputStream.bufferedReader().useLines { lines ->
+                            logFile.appendText(
+                                lines.map { OlcrtcLogSanitizer.sanitize(it) }
+                                    .joinToString("\n")
+                            )
+                        }
+                    } catch (e: IOException) {
+                        logFile.appendText("Export error: ${e.message}")
+                    }
+
+                    val uri = FileProvider.getUriForFile(
+                        context, BuildConfig.APPLICATION_ID + ".cache", logFile
+                    )
+                    context.startActivity(
+                        Intent.createChooser(
+                            Intent(Intent.ACTION_SEND)
+                                .setType("text/plain")
+                                .setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                .putExtra(Intent.EXTRA_STREAM, uri),
+                            "Share olcRTC log"
+                        )
+                    )
+                }
+            }
+            R.id.action_copy_olcrtc_log -> {
+                val text = binding.logsTextView.text.toString()
+                val sanitized = text.lines()
+                    .map { OlcrtcLogSanitizer.sanitize(it) }
+                    .joinToString("\n")
+                val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("olcRTC log", sanitized))
+                Toast.makeText(requireContext(), "Log copied (secrets redacted)", Toast.LENGTH_SHORT).show()
             }
         }
         return true

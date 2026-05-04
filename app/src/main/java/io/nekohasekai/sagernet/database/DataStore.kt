@@ -386,6 +386,7 @@ object DataStore : OnPreferenceDataStoreChangeListener {
     var serverOlcrtcDnsServer by profileCacheStore.string(Key.SERVER_OLCRTC_DNS_SERVER)
     var serverOlcrtcVp8Fps by profileCacheStore.stringToInt(Key.SERVER_OLCRTC_VP8_FPS)
     var serverOlcrtcVp8BatchSize by profileCacheStore.stringToInt(Key.SERVER_OLCRTC_VP8_BATCH_SIZE)
+    var serverOlcrtcKeepaliveInterval by profileCacheStore.stringToInt(Key.SERVER_OLCRTC_KEEPALIVE_INTERVAL)
     var serverSingUot by profileCacheStore.boolean(Key.SERVER_SING_UOT)
     var serverSingMux by profileCacheStore.boolean(Key.SERVER_SING_MUX)
     var serverSingMuxProtocol by profileCacheStore.string(Key.SERVER_SING_MUX_PROTOCOL)

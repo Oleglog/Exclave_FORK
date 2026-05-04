@@ -24,9 +24,13 @@ import io.nekohasekai.sagernet.bg.AbstractInstance
 import io.nekohasekai.sagernet.bg.VpnService
 import io.nekohasekai.sagernet.fmt.olcrtc.OLCRTCBean
 import io.nekohasekai.sagernet.ktx.Logs
+import kotlinx.coroutines.*
 import mobile.LogWriter
 import mobile.Mobile
 import mobile.SocketProtector
+import java.net.InetSocketAddress
+import java.net.Proxy
+import java.net.Socket
 
 /**
  * Wraps the gomobile-bound olcrtc client (`mobile.Mobile`) as an
@@ -44,12 +48,26 @@ class OLCRTCExternalInstance(
     private val port: Int,
     private val username: String,
     private val password: String,
+    private val onFatalError: (String) -> Unit = {},
 ) : AbstractInstance {
+
+    companion object {
+        private const val MAX_RECONNECT_ATTEMPTS = 10
+        private const val INITIAL_BACKOFF_MS = 1_000L
+        private const val MAX_BACKOFF_MS = 30_000L
+    }
 
     @Volatile
     private var started = false
 
-    override fun launch() {
+    @Volatile
+    private var closing = false
+
+    private var reconnectJob: Job? = null
+    private var keepaliveJob: Job? = null
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    private fun setupMobileCallbacks() {
         Mobile.setProtector(object : SocketProtector {
             override fun protect(fd: Long): Boolean {
                 val vpn = VpnService.instance ?: return true
@@ -62,7 +80,9 @@ class OLCRTCExternalInstance(
             }
         })
         Mobile.setDebug(BuildConfig.DEBUG)
+    }
 
+    private fun startGoClient() {
         val carrier = when (bean.provider) {
             "wb_stream" -> "wbstream"
             else -> bean.provider.ifBlank { OLCRTCBean.PROVIDER_TELEMOST }
@@ -88,8 +108,14 @@ class OLCRTCExternalInstance(
             username,
             password,
         )
+        Mobile.waitReady(15_000L)
+    }
+
+    override fun launch() {
+        closing = false
+        setupMobileCallbacks()
         try {
-            Mobile.waitReady(15_000L)
+            startGoClient()
         } catch (e: Exception) {
             try {
                 Mobile.stop()
@@ -98,9 +124,76 @@ class OLCRTCExternalInstance(
             throw e
         }
         started = true
+        startKeepalive()
+    }
+
+    private fun onSessionLost(reason: String) {
+        if (closing || !started) return
+        Logs.w("[olcrtc] session lost: $reason — starting reconnect")
+        stopKeepalive()
+        reconnectJob?.cancel()
+        reconnectJob = scope.launch {
+            var attempt = 0
+            var backoff = INITIAL_BACKOFF_MS
+            while (attempt < MAX_RECONNECT_ATTEMPTS && !closing) {
+                attempt++
+                Logs.i("[olcrtc] reconnect attempt $attempt/$MAX_RECONNECT_ATTEMPTS (backoff ${backoff}ms)")
+                try {
+                    Mobile.stop()
+                } catch (_: Exception) {
+                }
+                delay(backoff)
+                if (closing) break
+                try {
+                    startGoClient()
+                    Logs.i("[olcrtc] reconnected successfully")
+                    startKeepalive()
+                    return@launch
+                } catch (e: Exception) {
+                    Logs.w("[olcrtc] reconnect attempt $attempt failed: ${e.message}")
+                }
+                backoff = (backoff * 2).coerceAtMost(MAX_BACKOFF_MS)
+            }
+            if (!closing) {
+                val msg = "olcRTC: reconnect failed after $MAX_RECONNECT_ATTEMPTS attempts"
+                Logs.e("[olcrtc] $msg")
+                onFatalError(msg)
+            }
+        }
+    }
+
+    private fun startKeepalive() {
+        val intervalSec = bean.keepaliveIntervalSec.let { if (it <= 0) return else it }
+        keepaliveJob = scope.launch {
+            while (isActive && started && !closing) {
+                delay(intervalSec * 1000L)
+                if (closing || !started) break
+                try {
+                    val socket = Socket(
+                        Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", port))
+                    )
+                    socket.soTimeout = 5_000
+                    socket.connect(InetSocketAddress("1.1.1.1", 53), 5_000)
+                    socket.close()
+                    Logs.d("[olcrtc] keepalive OK")
+                } catch (e: Exception) {
+                    Logs.w("[olcrtc] keepalive failed: ${e.message}")
+                    onSessionLost("keepalive failed: ${e.message}")
+                    break
+                }
+            }
+        }
+    }
+
+    private fun stopKeepalive() {
+        keepaliveJob?.cancel()
     }
 
     override fun close() {
+        closing = true
+        stopKeepalive()
+        reconnectJob?.cancel()
+        scope.cancel()
         if (!started) return
         try {
             Mobile.stop()

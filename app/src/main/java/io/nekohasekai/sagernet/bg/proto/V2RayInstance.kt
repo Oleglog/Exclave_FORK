@@ -101,7 +101,16 @@ abstract class V2RayInstance(
                         )
                     }
                     is OLCRTCBean -> {
-                        externalInstances[port] = OLCRTCExternalInstance(bean, port, username, password)
+                        externalInstances[port] = OLCRTCExternalInstance(
+                            bean, port, username, password
+                        ) { msg ->
+                            val svc = (this@V2RayInstance as? ProxyInstance)?.service
+                            if (svc != null) {
+                                kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                                    svc.stopRunner(false, msg)
+                                }
+                            }
+                        }
                     }
                 }
             }

@@ -271,6 +271,10 @@
     <string name="olcrtc_transport">Transport</string>
     <string name="olcrtc_dns_server">DNS server</string>
     <string name="olcrtc_dns_server_summary">DNS server used by the olcRTC client to resolve provider hosts (e.g. 1.1.1.1:53).</string>
+    <string name="olcrtc_keepalive_interval">Keepalive interval (sec)</string>
+    <string name="olcrtc_keepalive_interval_summary">Send a ping every N seconds to keep the WebRTC session alive (0 = disabled)</string>
+    <string name="export_olcrtc_log">Export olcRTC log</string>
+    <string name="copy_olcrtc_log">Copy log (redacted)</string>
     <string name="ss_cat">Shadowsocks settings</string>
     <string name="unsaved_changes_prompt">Changes are not saved. Do you want to save?</string>
     <string name="apply">Apply</string>
