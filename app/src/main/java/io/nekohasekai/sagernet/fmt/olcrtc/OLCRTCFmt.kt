@@ -33,6 +33,8 @@ fun parseOLCRTC(url: String): OLCRTCBean {
         keyHex = link.queryParameter("key") ?: ""
         dnsServer = link.queryParameter("dns") ?: "1.1.1.1:53"
         transport = link.queryParameter("transport") ?: OLCRTCBean.TRANSPORT_DATACHANNEL
+        vp8Fps = link.queryParameter("vp8_fps")?.toIntOrNull()?.takeIf { it > 0 } ?: 60
+        vp8BatchSize = link.queryParameter("vp8_batch")?.toIntOrNull()?.takeIf { it > 0 } ?: 8
         name = link.fragment ?: ""
 
         validate()
@@ -47,6 +49,14 @@ fun OLCRTCBean.toUri(): String {
         addQueryParameter("key", keyHex)
         if (transport.isNotEmpty() && transport != OLCRTCBean.TRANSPORT_DATACHANNEL) {
             addQueryParameter("transport", transport)
+            if (transport == OLCRTCBean.TRANSPORT_VP8CHANNEL) {
+                if (vp8Fps > 0 && vp8Fps != 60) {
+                    addQueryParameter("vp8_fps", vp8Fps.toString())
+                }
+                if (vp8BatchSize > 0 && vp8BatchSize != 8) {
+                    addQueryParameter("vp8_batch", vp8BatchSize.toString())
+                }
+            }
         }
         if (dnsServer.isNotEmpty() && dnsServer != "1.1.1.1:53") {
             addQueryParameter("dns", dnsServer)
@@ -68,6 +78,8 @@ fun parseOLCRTCJson(text: String): OLCRTCBean {
         roomId = json.optString("room_id", "")
         keyHex = json.optString("key_hex", "")
         dnsServer = json.optString("dns_server", "1.1.1.1:53")
+        vp8Fps = json.optInt("vp8_fps", 60).takeIf { it > 0 } ?: 60
+        vp8BatchSize = json.optInt("vp8_batch", 8).takeIf { it > 0 } ?: 8
 
         validate()
     }
