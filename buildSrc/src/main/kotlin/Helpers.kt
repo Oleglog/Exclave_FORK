@@ -136,7 +136,7 @@ fun Project.setupAppCommon(projectName: String = "") {
         if (gradle.startParameter.taskNames.isNotEmpty() && gradle.startParameter.taskNames.any { it.lowercase().contains("assemble") }) {
             splits.abi.apply {
                 isEnable = true
-                isUniversalApk = false
+                isUniversalApk = true
                 reset()
                 include("x86", "x86_64", "armeabi-v7a", "arm64-v8a")
             }
