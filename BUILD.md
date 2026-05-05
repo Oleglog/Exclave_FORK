@@ -1,36 +1,94 @@
 # Build Requirements
 
-## Prerequisites
+## 1. Установка зависимостей
 
-| Tool | Version | Note |
-|------|---------|------|
-| **Go** | **1.25.9** | Go 1.26+ вызывает краш на 32-bit Android ≤ 10 (seccomp блокирует `futex_time64`) |
-| **gomobile** | latest | `go install golang.org/x/mobile/cmd/gomobile@latest && gomobile init` |
-| **gobind** | latest | `go install golang.org/x/mobile/cmd/gobind@latest` |
-| **Android NDK** | 27.x | Через Android SDK Manager |
-| **Android SDK** | compileSdk 37, minSdk 21, targetSdk 36 | |
-| **JDK** | 21 | Eclipse Adoptium / Temurin рекомендуется |
-| **Gradle** | 9.5+ | Поставляется через `gradlew` wrapper |
+### Go 1.25.9
 
-## Environment Variables
+> **Критично:** использовать именно **Go 1.25.x**. Go 1.26+ ломает 32-bit ARM на Android ≤ 10
+> (см. [Known Issues](#known-issues)).
+
+Скачать: <https://go.dev/dl/> → выбрать **go1.25.9** для своей ОС.
+
+Или установить рядом с текущей версией Go:
 
 ```bash
-export ANDROID_HOME=$HOME/Android/Sdk
-export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973
-export JAVA_HOME=/path/to/jdk-21
+go install golang.org/dl/go1.25.9@latest
+go1.25.9 download
 ```
 
-Windows (PowerShell):
+Проверка:
+
+```bash
+go1.25.9 version   # go version go1.25.9 ...
+```
+
+### gomobile + gobind
+
+```bash
+go1.25.9 install golang.org/x/mobile/cmd/gomobile@latest
+go1.25.9 install golang.org/x/mobile/cmd/gobind@latest
+gomobile init
+```
+
+### JDK 21
+
+Подойдёт любой дистрибутив JDK 21:
+
+- **Eclipse Adoptium (Temurin)** — <https://adoptium.net/temurin/releases/?version=21>
+- **Oracle JDK** — <https://www.oracle.com/java/technologies/downloads/#java21>
+- **Amazon Corretto** — <https://docs.aws.amazon.com/corretto/latest/corretto-21-ug/downloads-list.html>
+
+### Android SDK + NDK
+
+Установить через [Android Studio](https://developer.android.com/studio) → SDK Manager, либо через
+[command-line tools](https://developer.android.com/studio#command-line-tools-only):
+
+```bash
+sdkmanager "platforms;android-37" "build-tools;37.0.0" "ndk;27.0.12077973"
+```
+
+Минимальные требования: **compileSdk 37**, **minSdk 21**, **targetSdk 36**, **NDK 27.x**.
+
+### Gradle
+
+Поставляется через wrapper (`gradlew` / `gradlew.bat`), отдельная установка **не требуется**.
+
+---
+
+## 2. Переменные окружения
+
+Установить `ANDROID_HOME`, `ANDROID_NDK_HOME`, `JAVA_HOME` и добавить Go 1.25.9 в `PATH`.
+
+**Linux / macOS:**
+
+```bash
+export ANDROID_HOME="$HOME/Android/Sdk"
+export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.0.12077973"
+export JAVA_HOME="/path/to/jdk-21"            # например /usr/lib/jvm/temurin-21-jdk
+export GOROOT="$(go1.25.9 env GOROOT)"
+export PATH="$GOROOT/bin:$PATH"
+```
+
+**Windows (PowerShell):**
+
 ```powershell
 $env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
 $env:ANDROID_NDK_HOME = "$env:ANDROID_HOME\ndk\27.0.12077973"
-$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-21.0.8.9-hotspot"
+$env:JAVA_HOME = (Get-ChildItem "C:\Program Files\Eclipse Adoptium\jdk-21*" |
+                  Select-Object -First 1).FullName          # авто-поиск JDK 21
+$env:GOROOT = (go1.25.9 env GOROOT)
+$env:PATH   = "$env:GOROOT\bin;$env:PATH"
 ```
 
-## Step 1 — Build AAR (Go library)
+> Если JDK установлен в нестандартном месте, укажите путь вручную.
+
+---
+
+## 3. Сборка AAR (Go-библиотека)
 
 ```bash
 cd library/core
+
 # Linux / macOS
 ./build.sh
 
@@ -39,7 +97,9 @@ build.bat
 ```
 
 Скрипт выполняет:
+
 ```
+CGO_LDFLAGS="-Wl,-z,max-page-size=16384" \
 gomobile bind -v -androidapi 21 -trimpath \
   -ldflags="-s -buildid= -checklinkname=0" \
   -tags="with_clash" \
@@ -48,9 +108,11 @@ gomobile bind -v -androidapi 21 -trimpath \
   "github.com/openlibrecommunity/olcrtc/mobile"
 ```
 
-Результат копируется в `app/libs/libsagernetcore.aar`.
+Результат автоматически копируется в `app/libs/libsagernetcore.aar`.
 
-## Step 2 — Build APK
+---
+
+## 4. Сборка APK
 
 ```bash
 # Из корня проекта
@@ -58,6 +120,7 @@ gomobile bind -v -androidapi 21 -trimpath \
 ```
 
 APK появятся в `app/build/outputs/apk/oss/debug/`:
+
 - `olcRTC-*-arm64-v8a-debug.apk`
 - `olcRTC-*-armeabi-v7a-debug.apk`
 - `olcRTC-*-x86-debug.apk`
@@ -66,6 +129,14 @@ APK появятся в `app/build/outputs/apk/oss/debug/`:
 
 Universal APK контролируется флагом `isUniversalApk` в `buildSrc/src/main/kotlin/Helpers.kt`.
 
+---
+
 ## Known Issues
 
-- **Go ≥ 1.26 + 32-bit ARM + Android ≤ 10** — краш при старте (`Fatal signal 31 SIGSYS`, `seccomp prevented call to disallowed arm system call 422`). Go 1.26 использует `futex_time64`, который заблокирован seccomp-фильтром Android на API < 30. Решение: собирать AAR с **Go 1.25.9**.
+- **Go ≥ 1.26 + 32-bit ARM + Android ≤ 10** — краш при старте:
+  ```
+  Fatal signal 31 (SIGSYS), code 1 (SYS_SECCOMP)
+  Cause: seccomp prevented call to disallowed arm system call 422
+  ```
+  Go 1.26 использует `futex_time64` (syscall 422), который заблокирован seccomp-фильтром
+  Android на API < 30. **Решение:** собирать AAR с **Go 1.25.9**.
