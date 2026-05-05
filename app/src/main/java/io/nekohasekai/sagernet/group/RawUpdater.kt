@@ -22,8 +22,6 @@ package io.nekohasekai.sagernet.group
 
 import androidx.core.net.toUri
 import io.nekohasekai.sagernet.R
-import io.nekohasekai.sagernet.SagerNet
-import io.nekohasekai.sagernet.database.DataStore
 import io.nekohasekai.sagernet.database.GroupManager
 import io.nekohasekai.sagernet.database.ProxyEntity
 import io.nekohasekai.sagernet.database.ProxyGroup
@@ -34,7 +32,6 @@ import io.nekohasekai.sagernet.fmt.shadowsocks.parseShadowsocksConfig
 import io.nekohasekai.sagernet.fmt.olcrtc.parseOLCRTCJson
 import io.nekohasekai.sagernet.fmt.wireguard.parseWireGuardConfig
 import io.nekohasekai.sagernet.ktx.*
-import libsagernetcore.Libsagernetcore
 import org.yaml.snakeyaml.DumperOptions
 import org.yaml.snakeyaml.LoaderOptions
 import org.yaml.snakeyaml.Yaml
@@ -68,23 +65,14 @@ object RawUpdater : GroupUpdater() {
             proxies = contentText?.let { parseRaw(contentText) }
                 ?: error(app.getString(R.string.no_proxies_found_in_subscription))
         } else {
-            val response = Libsagernetcore.newHttpClient().apply {
-                if (SagerNet.started && DataStore.startedProfile > 0) {
-                    useUDS(SagerNet.deviceStorage.noBackupFilesDir.toString() + "/ipc.sock")
-                }
-            }.newRequest().apply {
-                setURL(subscription.link)
-                if (subscription.customUserAgent.isNotEmpty()) {
-                    setUserAgent(subscription.customUserAgent)
-                } else {
-                    setUserAgent(USER_AGENT)
-                }
-            }.execute()
+            val response = SubscriptionHttpClient.fetch(
+                subscription.link, subscription.customUserAgent
+            )
 
             proxies = parseRaw(response.contentString)
                 ?: error(app.getString(R.string.no_proxies_found))
 
-            val subscriptionUserinfo = response.getHeader("Subscription-Userinfo")
+            val subscriptionUserinfo = response.headers["Subscription-Userinfo"] ?: ""
             if (subscriptionUserinfo.isNotEmpty()) {
                 fun get(regex: String): String? {
                     return regex.toRegex().findAll(subscriptionUserinfo).mapNotNull {

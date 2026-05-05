@@ -23,12 +23,10 @@ import androidx.core.net.toUri
 import com.google.gson.JsonObject
 import io.nekohasekai.sagernet.ExtraType
 import io.nekohasekai.sagernet.R
-import io.nekohasekai.sagernet.SagerNet
 import io.nekohasekai.sagernet.database.*
 import io.nekohasekai.sagernet.fmt.AbstractBean
 import io.nekohasekai.sagernet.fmt.shadowsocks.parseShadowsocksConfig
 import io.nekohasekai.sagernet.ktx.*
-import libsagernetcore.Libsagernetcore
 
 object SIP008Updater : GroupUpdater() {
 
@@ -50,19 +48,9 @@ object SIP008Updater : GroupUpdater() {
                 sip008Response = contentText?.let { parseJson(contentText).asJsonObject }
                     ?: error(app.getString(R.string.no_proxies_found_in_subscription))
             } else {
-
-                val response = Libsagernetcore.newHttpClient().apply {
-                    if (SagerNet.started && DataStore.startedProfile > 0) {
-                        useUDS(SagerNet.deviceStorage.noBackupFilesDir.toString() + "/ipc.sock")
-                    }
-                }.newRequest().apply {
-                    setURL(subscription.link)
-                    if (subscription.customUserAgent.isNotEmpty()) {
-                        setUserAgent(subscription.customUserAgent)
-                    } else {
-                        setUserAgent(USER_AGENT)
-                    }
-                }.execute()
+                val response = SubscriptionHttpClient.fetch(
+                    subscription.link, subscription.customUserAgent
+                )
 
                 sip008Response = parseJson(response.contentString).asJsonObject
             }
