@@ -42,6 +42,9 @@ object SubscriptionHttpClient {
                 useUDS(SagerNet.deviceStorage.noBackupFilesDir.toString() + "/ipc.sock")
             }
         }.newRequest().apply {
+            if (DataStore.allowInsecureOnRequest) {
+                allowInsecure()
+            }
             setURL(link)
             setUserAgent(ua)
         }.execute()

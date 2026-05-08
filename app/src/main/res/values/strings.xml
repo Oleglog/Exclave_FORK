@@ -610,6 +610,8 @@
     <string name="discard_icmp_sum">Discard ICMP and ICMPv6</string>
     <string name="insecure_warn">Security tips</string>
     <string name="insecure_warn_sum">Display warnings for profiles with equivalent security to cleartext.</string>
+    <string name="global_allow_insecure">Always allow insecure</string>
+    <string name="allow_insecure_on_request_sum">Disable certificate checking when updating subscriptions</string>
     <string name="ech">ECH</string>
     <string name="server_name_to_verify">ServerNameToVerify</string>
     <string name="mieru_traffic_pattern">Traffic pattern</string>

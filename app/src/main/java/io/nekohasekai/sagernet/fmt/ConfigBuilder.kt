@@ -958,7 +958,7 @@ fun buildV2RayConfig(
                                                 if (bean.pinnedPeerCertificateChainSha256.isNotEmpty()) {
                                                     pinnedPeerCertificateChainSha256 = bean.pinnedPeerCertificateChainSha256.listByLineOrComma()
                                                 }
-                                                if (bean.allowInsecure) {
+                                                if (bean.allowInsecure || DataStore.globalAllowInsecure) {
                                                     allowInsecure = true
                                                 }
                                                 if (bean.utlsFingerprint.isNotEmpty()) {
@@ -1436,7 +1436,7 @@ fun buildV2RayConfig(
                                         if (bean.sni.isNotEmpty()) {
                                             serverName = bean.sni
                                         }
-                                        if (bean.allowInsecure) {
+                                        if (bean.allowInsecure || DataStore.globalAllowInsecure) {
                                             allowInsecure = true
                                         }
                                         if (bean.pinnedPeerCertificateSha256.isNotEmpty()) {
@@ -1504,7 +1504,7 @@ fun buildV2RayConfig(
                                         if (bean.alpn.isNotEmpty()) {
                                             alpn = bean.alpn.listByLineOrComma()
                                         }
-                                        if (bean.allowInsecure) {
+                                        if (bean.allowInsecure || DataStore.globalAllowInsecure) {
                                             allowInsecure = true
                                         }
                                         if (bean.certificates.isNotEmpty() || bean.mtlsCertificate.isNotEmpty() || bean.mtlsCertificatePrivateKey.isNotEmpty()) {
@@ -1591,7 +1591,7 @@ fun buildV2RayConfig(
                                         if (bean.pinnedPeerCertificateChainSha256.isNotEmpty()) {
                                             pinnedPeerCertificateChainSha256 = bean.pinnedPeerCertificateChainSha256.listByLineOrComma()
                                         }
-                                        if (bean.allowInsecure) {
+                                        if (bean.allowInsecure || DataStore.globalAllowInsecure) {
                                             allowInsecure = true
                                         }
                                         if (bean.echEnabled) {
@@ -1623,7 +1623,7 @@ fun buildV2RayConfig(
                                         if (bean.alpn.isNotEmpty()) {
                                             alpn = bean.alpn.listByLineOrComma()
                                         }
-                                        if (bean.allowInsecure) {
+                                        if (bean.allowInsecure || DataStore.globalAllowInsecure) {
                                             allowInsecure = true
                                         }
                                         if (bean.certificates.isNotEmpty()) {
@@ -1689,7 +1689,7 @@ fun buildV2RayConfig(
                                                 if (bean.pinnedPeerCertificateChainSha256.isNotEmpty()) {
                                                     pinnedPeerCertificateChainSha256 = bean.pinnedPeerCertificateChainSha256.listByLineOrComma()
                                                 }
-                                                if (bean.allowInsecure) {
+                                                if (bean.allowInsecure || DataStore.globalAllowInsecure) {
                                                     allowInsecure = true
                                                 }
                                                 if (bean.utlsFingerprint.isNotEmpty()) {
@@ -1758,7 +1758,7 @@ fun buildV2RayConfig(
                                         if (bean.sni.isNotEmpty()) {
                                             serverName = bean.sni
                                         }
-                                        if (bean.allowInsecure) {
+                                        if (bean.allowInsecure || DataStore.globalAllowInsecure) {
                                             allowInsecure = true
                                         }
                                         if (bean.pinnedPeerCertificateSha256.isNotEmpty()) {
@@ -1899,7 +1899,7 @@ fun buildV2RayConfig(
                                         if (bean.pinnedPeerCertificateChainSha256.isNotEmpty()) {
                                             pinnedPeerCertificateChainSha256 = bean.pinnedPeerCertificateChainSha256.listByLineOrComma()
                                         }
-                                        if (bean.allowInsecure) {
+                                        if (bean.allowInsecure || DataStore.globalAllowInsecure) {
                                             allowInsecure = true
                                         }
                                         if (bean.echEnabled) {

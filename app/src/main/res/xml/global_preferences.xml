@@ -259,6 +259,13 @@
             app:key="profileSecurityAdvisory"
             app:summary="@string/insecure_warn_sum"
             app:title="@string/insecure_warn" />
+        <SwitchPreference
+            app:icon="@drawable/ic_action_lock_open"
+            app:key="globalAllowInsecure"
+            app:title="@string/global_allow_insecure" />
+        <SwitchPreference
+            app:key="allowInsecureOnRequest"
+            app:title="@string/allow_insecure_on_request_sum" />
     </PreferenceCategory>
 
     <PreferenceCategory app:title="@string/cag_dns">

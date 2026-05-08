@@ -274,6 +274,8 @@ object DataStore : OnPreferenceDataStoreChangeListener {
     var shadowsocks2022Implementation by configurationStore.stringToInt(Key.SHADOWSOCKS_2022_IMPLEMENTATION)
     var providerRootCA by configurationStore.stringToInt(Key.PROVIDER_ROOT_CA) { 1 }
     var interruptReusedConnections by configurationStore.boolean(Key.INTERRUPT_REUSED_CONNECTIONS) { true }
+    var globalAllowInsecure by configurationStore.boolean(Key.GLOBAL_ALLOW_INSECURE) { false }
+    var allowInsecureOnRequest by configurationStore.boolean(Key.ALLOW_INSECURE_ON_REQUEST) { false }
 
     // cache
 
