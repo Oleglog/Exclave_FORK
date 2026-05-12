@@ -7,6 +7,13 @@ import io.nekohasekai.sagernet.ktx.USER_AGENT
 import libsagernetcore.Libsagernetcore
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
+import javax.net.ssl.HostnameVerifier
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
 
 data class SubscriptionResponse(
     val contentString: String,
@@ -18,6 +25,21 @@ object SubscriptionHttpClient {
     fun fetch(link: String, customUserAgent: String): SubscriptionResponse {
         val ua = customUserAgent.ifEmpty { USER_AGENT }
         val connected = SagerNet.started && DataStore.startedProfile > 0
+
+        Logs.d("Subscription fetch: allowInsecure=${DataStore.allowInsecureOnRequest}, connected=$connected, link=${link.take(30)}...")
+
+        // When allowInsecureOnRequest is enabled, go directly (not via local proxy)
+        // so that allowInsecure() actually disables TLS verification on the target server.
+        // When useProxy=true, the proxy kernel performs its own TLS handshake
+        // and ignores the Go client's InsecureSkipVerify flag.
+        if (DataStore.allowInsecureOnRequest) {
+            return try {
+                fetchViaGo(link, ua, useProxy = false)
+            } catch (goEx: Exception) {
+                Logs.w("Go HTTP failed, trying Java client: ${goEx.message}")
+                fetchViaJava(link, ua) // Java now also supports allowInsecure
+            }
+        }
 
         if (connected) {
             return fetchViaGo(link, ua, useProxy = true)
@@ -61,6 +83,10 @@ object SubscriptionHttpClient {
         val url = URL(link)
         val conn = url.openConnection() as HttpURLConnection
         try {
+            if (DataStore.allowInsecureOnRequest && conn is HttpsURLConnection) {
+                conn.sslSocketFactory = insecureSslSocketFactory
+                conn.hostnameVerifier = HostnameVerifier { _, _ -> true }
+            }
             conn.requestMethod = "GET"
             conn.setRequestProperty("User-Agent", ua)
             conn.connectTimeout = 15_000
@@ -81,5 +107,16 @@ object SubscriptionHttpClient {
         } finally {
             conn.disconnect()
         }
+    }
+
+    private val insecureSslSocketFactory by lazy {
+        val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
+            override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+            override fun checkClientTrusted(chain: Array<X509Certificate>?, authType: String?) {}
+            override fun checkServerTrusted(chain: Array<X509Certificate>?, authType: String?) {}
+        })
+        val sslContext = SSLContext.getInstance("TLS")
+        sslContext.init(null, trustAllCerts, SecureRandom())
+        sslContext.socketFactory
     }
 }
