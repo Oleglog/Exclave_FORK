@@ -139,7 +139,7 @@ require (
 
 replace (
 	github.com/dyhkwong/libsagernetcore => ./libsagernetcore
-	github.com/openlibrecommunity/olcrtc => github.com/Oleglog/Olcrtc_manager v0.0.0-20260503215120-15a41ac912e6
+	github.com/openlibrecommunity/olcrtc => github.com/Oleglog/Olcrtc_manager v0.0.0-20260512225612-2ba61dd40a5d
 	github.com/v2fly/v2ray-core/v5 => github.com/dyhkwong/v2ray-core/v5 v5.49.1-0.20260429195609-fcaef408a887
 	gvisor.dev/gvisor => gvisor.dev/gvisor v0.0.0-20250429202743-3a608a52255d
 )
