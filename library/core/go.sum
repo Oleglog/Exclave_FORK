@@ -31,8 +31,8 @@ github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERo
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
 github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5 h1:TngWCqHvy9oXAN6lEVMRuU21PR1EtLVZJmdB18Gu3Rw=
 github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5/go.mod h1:lmUJ/7eu/Q8D7ML55dXQrVaamCz2vxCfdQBasLZfHKk=
-github.com/Oleglog/Olcrtc_manager v0.0.0-20260513095337-716f45b585e0 h1:ObgJPea8kDA7N5qY9HCdRg4ebCpo5PLW5QiFwt/D76I=
-github.com/Oleglog/Olcrtc_manager v0.0.0-20260513095337-716f45b585e0/go.mod h1:l5lXsV2ZdHiqAdhc75DsBX1FhvrAM05GgJaGwULyxk4=
+github.com/Oleglog/Olcrtc_manager v0.0.0-20260513173112-bf226a39f6c8 h1:Reh5NfEKfPJLq9+0zet/2WbRYwvxBnJgh+So4QNveSg=
+github.com/Oleglog/Olcrtc_manager v0.0.0-20260513173112-bf226a39f6c8/go.mod h1:l5lXsV2ZdHiqAdhc75DsBX1FhvrAM05GgJaGwULyxk4=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
 github.com/adrg/xdg v0.5.3 h1:xRnxJXne7+oWDatRhR1JLnvuccuIeCoBu2rtuLqQB78=
 github.com/adrg/xdg v0.5.3/go.mod h1:nlTsY+NNiCBGCK2tpm09vRqfVzrc2fLmXGpBLF0zlTQ=

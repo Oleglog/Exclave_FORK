@@ -70,7 +70,10 @@ class OLCRTCExternalInstance(
     private fun setupMobileCallbacks() {
         Mobile.setProtector(object : SocketProtector {
             override fun protect(fd: Long): Boolean {
-                val vpn = VpnService.instance ?: return true
+                val vpn = VpnService.instance ?: run {
+                    Logs.w("[olcrtc] VpnService.instance is null, cannot protect socket")
+                    return false
+                }
                 return vpn.protect(fd.toInt())
             }
         })
@@ -113,6 +116,9 @@ class OLCRTCExternalInstance(
 
     override fun launch() {
         closing = false
+        if (VpnService.instance == null) {
+            throw IllegalStateException("VpnService is not ready. Ensure the profile is started via the main toggle, not in standalone mode.")
+        }
         setupMobileCallbacks()
         try {
             startGoClient()
