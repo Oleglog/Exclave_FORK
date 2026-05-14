@@ -4,29 +4,38 @@ import (
 	"bytes"
 	"encoding/hex"
 	"errors"
-	"fmt"
 
 	"github.com/pion/webrtc/v4/pkg/media/h264reader"
 )
 
+// ErrInvalidH264Constant is returned by mustDecodeHex when a hardcoded
+// constant cannot be parsed.
+var ErrInvalidH264Constant = errors.New("invalid hardcoded h264 constant")
+
+// ErrCreateH264Reader wraps reader creation failures.
+var ErrCreateH264Reader = errors.New("create h264 reader")
+
+const seiHeaderReserve = 8
+
 var (
-	// ErrSEIPayloadTruncated is returned when the SEI payload is shorter than expected.
+	// ErrSEIPayloadTruncated is returned when the SEI payload is
+	// shorter than expected.
 	ErrSEIPayloadTruncated = errors.New("sei payload truncated")
 	// ErrSEIValueTruncated is returned when reading a SEI length-value runs past the buffer.
 	ErrSEIValueTruncated = errors.New("sei value truncated")
-)
 
-//nolint:gochecknoglobals
-var (
-	videoSEIUUID = [16]byte{
+	videoSEIUUID = [16]byte{ //nolint:gochecknoglobals // package-level state intentional
 		0x5d, 0xc0, 0x3b, 0xa8,
 		0x45, 0x0f,
 		0x4b, 0x55,
 		0x9a, 0x77,
 		0x1f, 0x91, 0x6c, 0x5b, 0x07, 0x39,
 	}
+	//nolint:gochecknoglobals // hardcoded H264 constants
 	baseSPS = mustDecodeHex("6742c00addec0440000003004000000300a3c489e0")
+	//nolint:gochecknoglobals // hardcoded H264 constants
 	basePPS = mustDecodeHex("68ce0fc8")
+	//nolint:gochecknoglobals // hardcoded H264 constants
 	baseIDR = mustDecodeHex("6588843a2628000902e0")
 )
 
@@ -39,13 +48,14 @@ func buildVideoAccessUnit(payload []byte) []byte {
 		out = appendStartCode(out, sei)
 	}
 	out = appendStartCode(out, baseIDR)
+
 	return out
 }
 
 func extractVideoPayloads(accessUnit []byte) ([][]byte, error) {
 	reader, err := h264reader.NewReaderWithOptions(bytes.NewReader(accessUnit), h264reader.WithIncludeSEI(true))
 	if err != nil {
-		return nil, fmt.Errorf("create h264 reader: %w", err)
+		return nil, errors.Join(ErrCreateH264Reader, err)
 	}
 
 	payloads := make([][]byte, 0, 1)
@@ -74,7 +84,7 @@ func buildSEINAL(payload []byte) []byte {
 	userData = append(userData, videoSEIUUID[:]...)
 	userData = append(userData, payload...)
 
-	rbsp := make([]byte, 0, len(userData)+8)
+	rbsp := make([]byte, 0, len(userData)+seiHeaderReserve)
 	rbsp = appendSEIValue(rbsp, 5)
 	rbsp = appendSEIValue(rbsp, len(userData))
 	rbsp = append(rbsp, userData...)
@@ -135,7 +145,7 @@ func appendSEIValue(dst []byte, value int) []byte {
 		dst = append(dst, 0xff)
 		value -= 0xff
 	}
-	return append(dst, byte(value)) //nolint:gosec
+	return append(dst, byte(value)) //nolint:gosec // G115: bounded conversion verified by surrounding logic
 }
 
 func consumeSEIValue(data []byte, pos int) (int, int, error) {
@@ -190,8 +200,7 @@ func unescapeRBSP(rbsp []byte) []byte {
 func mustDecodeHex(value string) []byte {
 	data, err := hex.DecodeString(value)
 	if err != nil {
-		// Hardcoded constants — if this fires the binary is corrupt.
-		panic(fmt.Sprintf("mustDecodeHex: invalid hardcoded constant %q: %v", value, err))
+		panic(errors.Join(ErrInvalidH264Constant, err))
 	}
 	return data
 }

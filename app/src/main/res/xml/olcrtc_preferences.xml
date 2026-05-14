@@ -8,7 +8,7 @@
         app:title="@string/profile_name"
         app:useSimpleSummaryProvider="true" />
 
-    <PreferenceCategory app:title="@string/proxy_cat">
+    <PreferenceCategory app:title="@string/olcrtc_connection_cat">
 
         <io.nekohasekai.sagernet.widget.SimpleMenuPreference
             android:layout_height="match_parent"
@@ -17,18 +17,19 @@
             app:entryValues="@array/olcrtc_provider_value"
             app:icon="@drawable/ic_baseline_layers_24"
             app:key="serverOlcrtcProvider"
+            app:summary="@string/olcrtc_provider_summary"
             app:title="@string/olcrtc_provider"
-            app:useSimpleSummaryProvider="true" />
+            app:useSimpleSummaryProvider="false" />
 
         <io.nekohasekai.sagernet.widget.SimpleMenuPreference
             android:layout_height="match_parent"
             app:defaultValue="datachannel"
             app:entries="@array/olcrtc_transport_entry"
             app:entryValues="@array/olcrtc_transport_value"
-            app:icon="@drawable/ic_baseline_layers_24"
+            app:icon="@drawable/ic_baseline_speed_24"
             app:key="serverOlcrtcTransport"
             app:title="@string/olcrtc_transport"
-            app:useSimpleSummaryProvider="true" />
+            app:useSimpleSummaryProvider="false" />
 
         <EditTextPreference
             app:icon="@drawable/ic_hardware_router"
@@ -38,10 +39,24 @@
 
         <EditTextPreference
             app:dialogLayout="@layout/layout_password_dialog"
+            app:icon="@drawable/ic_baseline_lock_24"
+            app:key="serverOlcrtcRoomPassword"
+            app:summary="@string/olcrtc_room_password_summary"
+            app:title="@string/olcrtc_room_password" />
+
+        <EditTextPreference
+            app:dialogLayout="@layout/layout_password_dialog"
             app:icon="@drawable/ic_settings_password"
             app:key="serverOlcrtcKeyHex"
             app:summary="@string/olcrtc_key_hex_summary"
             app:title="@string/olcrtc_key_hex" />
+
+        <Preference
+            app:icon="@drawable/ic_baseline_info_24"
+            app:key="serverOlcrtcClientId"
+            app:persistent="false"
+            app:summary="@string/olcrtc_client_id_summary"
+            app:title="@string/olcrtc_client_id" />
 
     </PreferenceCategory>
 
@@ -55,23 +70,28 @@
             app:useSimpleSummaryProvider="true" />
 
         <EditTextPreference
+            android:defaultValue="60"
+            android:inputType="number"
+            app:icon="@drawable/ic_baseline_speed_24"
             app:key="serverOlcrtcVp8Fps"
-            app:title="VP8 FPS"
-            android:inputType="number"
-            android:defaultValue="60" />
+            app:summary="@string/olcrtc_vp8_fps_summary"
+            app:title="@string/olcrtc_vp8_fps" />
 
         <EditTextPreference
+            android:defaultValue="8"
+            android:inputType="number"
+            app:icon="@drawable/ic_baseline_speed_24"
             app:key="serverOlcrtcVp8BatchSize"
-            app:title="VP8 Batch Size"
-            android:inputType="number"
-            android:defaultValue="8" />
+            app:summary="@string/olcrtc_vp8_batch_size_summary"
+            app:title="@string/olcrtc_vp8_batch_size" />
 
         <EditTextPreference
-            app:key="serverOlcrtcKeepaliveInterval"
-            app:title="@string/olcrtc_keepalive_interval"
-            app:summary="@string/olcrtc_keepalive_interval_summary"
+            android:defaultValue="15"
             android:inputType="number"
-            android:defaultValue="15" />
+            app:icon="@drawable/ic_service_idle"
+            app:key="serverOlcrtcKeepaliveInterval"
+            app:summary="@string/olcrtc_keepalive_interval_summary"
+            app:title="@string/olcrtc_keepalive_interval" />
 
     </PreferenceCategory>
 

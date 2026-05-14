@@ -262,17 +262,33 @@
     <string name="plugin_disabled">Disabled</string>
     <string name="plugin_unknown">Unknown plugin: %s</string>
     <string name="proxy_cat">Server settings</string>
+    <string name="olcrtc_connection_cat">Connection</string>
     <string name="olcrtc_advanced_cat">Advanced</string>
     <string name="olcrtc_provider">Provider</string>
+    <string name="olcrtc_provider_summary">Server-side carrier handling the WebRTC handshake (Telemost / SaluteJazz / WB Stream).</string>
     <string name="olcrtc_room_id">Room ID</string>
     <string name="olcrtc_room_id_summary">Numeric room ID issued by your olcRTC server admin (the path part of e.g. https://telemost.yandex.ru/j/&lt;ID&gt;).</string>
+    <string name="olcrtc_room_password">Room password</string>
+    <string name="olcrtc_room_password_summary">Password for the SaluteJazz room. Required when the server enforces a room password (sent to auth/salutejazz as &lt;roomID&gt;:&lt;password&gt;).</string>
     <string name="olcrtc_key_hex">Pre-shared key (hex)</string>
     <string name="olcrtc_key_hex_summary">64-character hexadecimal pre-shared key issued by the olcRTC server.</string>
     <string name="olcrtc_transport">Transport</string>
+    <string name="olcrtc_transport_summary">Active transport: %s</string>
+    <string name="olcrtc_transport_datachannel">Data channel (default)</string>
+    <string name="olcrtc_transport_vp8channel">VP8 channel</string>
+    <string name="olcrtc_transport_seichannel">SEI channel</string>
+    <string name="olcrtc_transport_videochannel">Video channel</string>
     <string name="olcrtc_dns_server">DNS server</string>
     <string name="olcrtc_dns_server_summary">DNS server used by the olcRTC client to resolve provider hosts (e.g. 1.1.1.1:53).</string>
+    <string name="olcrtc_vp8_fps">VP8 FPS</string>
+    <string name="olcrtc_vp8_fps_summary">VP8 channel encode rate (1..120, default 60).</string>
+    <string name="olcrtc_vp8_batch_size">VP8 batch size</string>
+    <string name="olcrtc_vp8_batch_size_summary">VP8 channel batch size (1..64, default 8).</string>
     <string name="olcrtc_keepalive_interval">Keepalive interval (sec)</string>
     <string name="olcrtc_keepalive_interval_summary">Send a ping every N seconds to keep the WebRTC session alive (0 = disabled)</string>
+    <string name="olcrtc_client_id">Client ID</string>
+    <string name="olcrtc_client_id_summary">Issued by the server admin panel and delivered through the URI/QR (client_id=). Tap to copy. Read-only — the client never generates this value.</string>
+    <string name="olcrtc_client_id_missing">Profile is missing Client ID. Re-import the URI from the server admin panel.</string>
     <string name="export_olcrtc_log">Export olcRTC log</string>
     <string name="copy_olcrtc_log">Copy log (redacted)</string>
     <string name="ss_cat">Shadowsocks settings</string>

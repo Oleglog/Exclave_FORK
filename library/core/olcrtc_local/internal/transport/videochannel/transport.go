@@ -70,13 +70,13 @@ type streamTransport struct {
 	videoCodec      string
 	videoTileModule int
 	videoTileRS     int
-	runCtx          context.Context //nolint:containedctx
+	runCtx          context.Context //nolint:containedctx,lll // long-lived context drives idle-frame loops bound to this transport's lifetime
 
 	idleFrame   []byte
 	idleFrameMu sync.Mutex
 }
 
-// New creates a visual videochannel transport backed by a carrier-specific provider.
+// New creates a visual videochannel transport backed by a carrier.
 func New(ctx context.Context, cfg transport.Config) (transport.Transport, error) {
 	session, err := carrier.New(ctx, cfg.Carrier, carrier.Config{
 		RoomURL:   cfg.RoomURL,
@@ -90,7 +90,7 @@ func New(ctx context.Context, cfg transport.Config) (transport.Transport, error)
 		Token:     cfg.Token,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("create provider transport: %w", err)
+		return nil, fmt.Errorf("create carrier transport: %w", err)
 	}
 
 	videoCapable, ok := session.(carrier.VideoTrackCapable)
@@ -574,7 +574,7 @@ func (p *streamTransport) assembleMessage(msg *inboundMessage) []byte {
 	for _, frag := range msg.frags {
 		data = append(data, frag...)
 	}
-	if uint32(len(data)) > msg.totalLen { //nolint:gosec
+	if uint32(len(data)) > msg.totalLen { //nolint:gosec // G115: bounded conversion verified by surrounding logic
 		data = data[:msg.totalLen]
 	}
 	return data

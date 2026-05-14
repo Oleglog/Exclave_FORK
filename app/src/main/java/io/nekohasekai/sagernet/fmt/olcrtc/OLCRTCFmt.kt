@@ -30,12 +30,16 @@ fun parseOLCRTC(url: String): OLCRTCBean {
     return OLCRTCBean().apply {
         provider = normalizeCarrier(link.username)
         roomId = link.path.trimStart('/')
+        roomPassword = link.queryParameter("room_password") ?: ""
         keyHex = link.queryParameter("key") ?: ""
         dnsServer = link.queryParameter("dns") ?: "1.1.1.1:53"
         transport = link.queryParameter("transport") ?: OLCRTCBean.TRANSPORT_DATACHANNEL
         vp8Fps = link.queryParameter("vp8_fps")?.toIntOrNull()?.takeIf { it > 0 } ?: 60
         vp8BatchSize = link.queryParameter("vp8_batch")?.toIntOrNull()?.takeIf { it > 0 } ?: 8
         keepaliveIntervalSec = link.queryParameter("keepalive")?.toIntOrNull() ?: 15
+        // Server-issued client identifier; optional for backward compatibility
+        // with URIs exported before the server-side S8 work landed.
+        clientId = link.queryParameter("client_id") ?: ""
         name = link.fragment ?: ""
 
         validate()
@@ -48,6 +52,17 @@ fun OLCRTCBean.toUri(): String {
         username = provider
         path = "/$roomId"
         addQueryParameter("key", keyHex)
+        // Room password is salutejazz-only; never leak it for other carriers.
+        if (provider == OLCRTCBean.PROVIDER_JAZZ &&
+            !roomPassword.isNullOrEmpty()
+        ) {
+            addQueryParameter("room_password", roomPassword)
+        }
+        // Server-issued client_id; emit only when present so legacy profiles
+        // re-shared without it stay backward compatible.
+        if (!clientId.isNullOrEmpty()) {
+            addQueryParameter("client_id", clientId)
+        }
         if (transport.isNotEmpty() && transport != OLCRTCBean.TRANSPORT_DATACHANNEL) {
             addQueryParameter("transport", transport)
             if (transport == OLCRTCBean.TRANSPORT_VP8CHANNEL) {
@@ -80,6 +95,8 @@ fun parseOLCRTCJson(text: String): OLCRTCBean {
         provider = normalizeCarrier(json.optString("provider", ""))
         transport = json.optString("transport", OLCRTCBean.TRANSPORT_DATACHANNEL)
         roomId = json.optString("room_id", "")
+        roomPassword = json.optString("room_password", "")
+        clientId = json.optString("client_id", "")
         keyHex = json.optString("key_hex", "")
         dnsServer = json.optString("dns_server", "1.1.1.1:53")
         vp8Fps = json.optInt("vp8_fps", 60).takeIf { it > 0 } ?: 60

@@ -112,7 +112,33 @@ gomobile bind -v -androidapi 21 -trimpath \
 
 ---
 
-## 4. Сборка APK
+## 4. Источник olcRTC
+
+Модуль `github.com/openlibrecommunity/olcrtc` собирается **не** напрямую из публичного репозитория. В `library/core/go.mod` стоит директива:
+
+```
+replace github.com/openlibrecommunity/olcrtc => ./olcrtc_local
+```
+
+Это значит, что несмотря на то что `gomobile bind` в `build.sh` / `build.bat` указывает upstream-импорт `github.com/openlibrecommunity/olcrtc/mobile`, реально в AAR попадает код из локальной директории `library/core/olcrtc_local/`.
+
+В текущем форке выбран **вариант A** из исходного ТЗ: содержимое `olcrtc_local/` поддерживается как локальный snapshot эталонной ветки upstream `refactor/universal-carrier`. CI и `.gitmodules` не затронуты, обновление выполняется вручную.
+
+> **Внимание.** Любая пересборка `library/core/build.sh` без обновления источника olcRTC даст AAR из устаревшего кода и **НЕ** починит транспорты `datachannel` / `telemost` / `seichannel`. Если изменения в Go-уровне (например, новые сигнатуры `Start`/`StartWithTransport`, новый формат фрейминга `seichannel`, исправления в `auth/salutejazz`) не доходят до Android-приложения после пересборки AAR — первое, что нужно проверить, это совпадает ли содержимое `library/core/olcrtc_local/` с эталонной ветки.
+
+### Как обновить источник olcRTC (вариант A)
+
+1. Сложить актуальный snapshot эталона в `temp-files/olcrtc-refactor-universal-carrier/` (либо склонировать `git@github.com:openlibrecommunity/olcrtc.git` в эту директорию из ветки `refactor/universal-carrier`, оставив `.git/` за пределами форка).
+2. Удалить старую копию: `Remove-Item -Recurse -Force library/core/olcrtc_local` (Windows) или `rm -rf library/core/olcrtc_local` (Linux/macOS).
+3. Скопировать snapshot: `Copy-Item -Recurse -Force temp-files/olcrtc-refactor-universal-carrier library/core/olcrtc_local` (Windows) или `cp -r temp-files/olcrtc-refactor-universal-carrier library/core/olcrtc_local` (Linux/macOS).
+4. Обновить `go.sum`: `cd library/core && go mod tidy`.
+5. Пересобрать AAR (см. пункт 3 выше).
+
+Если в будущем форк перейдёт на git submodule (вариант B), команда обновления будет `git submodule update --remote library/core/olcrtc_local`. Если на удалённый модуль через `go.mod` (вариант C), команда будет `cd library/core && go get github.com/openlibrecommunity/olcrtc@<tag>` с одновременным удалением `replace` и директории `olcrtc_local/`.
+
+---
+
+## 5. Сборка APK
 
 ```bash
 # Из корня проекта

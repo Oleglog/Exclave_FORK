@@ -42,7 +42,7 @@ USER olcrtc:olcrtc
 WORKDIR /var/lib/olcrtc
 
 ENV OLCRTC_MODE=srv \
-    OLCRTC_PROVIDER= \
+    OLCRTC_CARRIER= \
     OLCRTC_DATA_DIR=/usr/share/olcrtc \
     OLCRTC_DNS=1.1.1.1:53 \
     OLCRTC_KEY_FILE=/var/lib/olcrtc/key.hex

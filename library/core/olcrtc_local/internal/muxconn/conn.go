@@ -50,6 +50,19 @@ func New(ln link.Link, cipher *crypto.Cipher) *Conn {
 	return c
 }
 
+// Reset clears any buffered inbound bytes, re-arms a closed conn for writes,
+// and unblocks pending Reads so the smux session on top of it exits cleanly.
+// Use it when the link stays up but the peer's smux session has been rebuilt:
+// the inbound byte stream (now indistinguishable random-looking data) must be
+// parsed by the fresh smux state, not the old one.
+func (c *Conn) Reset() {
+	c.mu.Lock()
+	c.buf = nil
+	c.closed = false
+	c.cond.Broadcast()
+	c.mu.Unlock()
+}
+
 // Push hands an encrypted wire payload (one OnData event) to the conn.
 func (c *Conn) Push(ciphertext []byte) {
 	pt, err := c.cipher.Decrypt(ciphertext)

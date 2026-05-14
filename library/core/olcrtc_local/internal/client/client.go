@@ -41,6 +41,10 @@ var (
 	ErrUnsupportedAddressType = errors.New("unsupported address type")
 	// ErrRemoteNotReady is returned when the server-side stream fails to signal readiness.
 	ErrRemoteNotReady = errors.New("remote not ready")
+	// ErrSOCKSAuthFailed is returned when username/password authentication is rejected.
+	ErrSOCKSAuthFailed = errors.New("SOCKS5 authentication failed")
+	// ErrSOCKSCredTooLong is returned when a SOCKS5 username or password exceeds 255 bytes.
+	ErrSOCKSCredTooLong = errors.New("socks5 user/pass exceeds 255 bytes")
 )
 
 // Client handles local SOCKS5 connections and tunnels them to the server.
@@ -55,6 +59,8 @@ type Client struct {
 	sessionID   string
 	claims      map[string]any
 	dnsServer   string
+	socksUser   string
+	socksPass   string
 }
 
 // Config holds runtime configuration for [Run] and [RunWithReady].
@@ -127,6 +133,8 @@ func RunWithReady(ctx context.Context, cfg Config, onReady func()) error {
 		deviceID:  deviceID,
 		claims:    cfg.Claims,
 		dnsServer: cfg.DNSServer,
+		socksUser: cfg.SOCKSUser,
+		socksPass: cfg.SOCKSPass,
 	}
 
 	if err := c.bringUpLink(runCtx, cfg, cancel); err != nil {
@@ -539,9 +547,57 @@ func (c *Client) socks5Handshake(conn net.Conn) error {
 	if _, err := io.ReadFull(conn, methods); err != nil {
 		return fmt.Errorf("read socks5 methods: %w", err)
 	}
+
+	if c.socksUser != "" {
+		// RFC 1929: method 0x02 = username/password auth.
+		if _, err := conn.Write([]byte{5, 2}); err != nil {
+			return fmt.Errorf("write socks5 auth method: %w", err)
+		}
+		if err := c.socks5UserPassAuth(conn); err != nil {
+			return err
+		}
+		return nil
+	}
+
 	if _, err := conn.Write([]byte{5, 0}); err != nil {
 		return fmt.Errorf("write socks5 auth: %w", err)
 	}
+	return nil
+}
+
+func (c *Client) socks5UserPassAuth(conn net.Conn) error {
+	header := make([]byte, 2)
+	if _, err := io.ReadFull(conn, header); err != nil {
+		return fmt.Errorf("read socks5 auth header: %w", err)
+	}
+	if header[0] != 0x01 {
+		return fmt.Errorf("%w: expected auth version 1, got %d", ErrInvalidSOCKSVersion, header[0])
+	}
+	ulen := int(header[1])
+	userBuf := make([]byte, ulen)
+	if _, err := io.ReadFull(conn, userBuf); err != nil {
+		return fmt.Errorf("read socks5 username: %w", err)
+	}
+	plenBuf := make([]byte, 1)
+	if _, err := io.ReadFull(conn, plenBuf); err != nil {
+		return fmt.Errorf("read socks5 plen: %w", err)
+	}
+
+	plen := int(plenBuf[0])
+	passBuf := make([]byte, plen)
+	if _, err := io.ReadFull(conn, passBuf); err != nil {
+		return fmt.Errorf("read socks5 password: %w", err)
+	}
+
+	if string(userBuf) != c.socksUser || string(passBuf) != c.socksPass {
+		_, _ = conn.Write([]byte{0x01, 0x01})
+		return ErrSOCKSAuthFailed
+	}
+
+	if _, err := conn.Write([]byte{0x01, 0x00}); err != nil {
+		return fmt.Errorf("write socks5 auth success: %w", err)
+	}
+
 	return nil
 }
 

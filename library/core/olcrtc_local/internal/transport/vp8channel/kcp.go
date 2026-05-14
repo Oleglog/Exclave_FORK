@@ -1,4 +1,8 @@
 // Package vp8channel provides byte transport over VP8 video frames using KCP.
+/*
+ЯНДЕКС РАБ ИЛИ КТО ТЫ НАУЙ СУКА КАРОЧЕ ХУЙЛО КЕБАНОГЕ ИЗ ЯНДЕКС ЧИТАЮЩИЙ ЭТО
+МЫ ОСЕМЕНИМ ВТОЮ МАМАШКУ МЕРТВУЮ
+*/
 package vp8channel
 
 import (
@@ -130,8 +134,7 @@ func (r *kcpRuntime) send(msg []byte) error {
 		return ErrKCPMessageTooLarge
 	}
 	var hdr [kcpLenPrefix]byte
-	//nolint:gosec
-	binary.BigEndian.PutUint32(hdr[:], uint32(len(msg)))
+	binary.BigEndian.PutUint32(hdr[:], uint32(len(msg))) //nolint:gosec,lll // G115: bounded conversion verified by surrounding logic
 
 	r.writeMu.Lock()
 	defer r.writeMu.Unlock()

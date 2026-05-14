@@ -1,0 +1,384 @@
+<div align="center">
+
+<img src="https://github.com/openlibrecommunity/material/blob/master/olcrtc.png" width="250" height="250">
+
+![License](https://img.shields.io/badge/license-WTFPL-0D1117?style=flat-square&logo=open-source-initiative&logoColor=green&labelColor=0D1117)
+![Golang](https://img.shields.io/badge/-Golang-0D1117?style=flat-square&logo=go&logoColor=00A7D0)
+
+</div>
+
+
+# Настройки
+
+## Матрица совместимости
+
+| Transport | telemost | jazz | wbstream |
+|-----------|:--------:|:----:|:--------:|
+| datachannel | - | * | ! |
+| vp8channel | + | + | + |
+| seichannel | - | + | + |
+| videochannel | + | + | + |
+
+**Легенда:**
+- `+` - работает
+- `-` - не поддерживается
+- `*` - работает, но не желательно
+- `!` - работает только если участникам выданы права на отправку data packets (`canPublishData`), обычно через модераторские права
+
+**Рекомендуемая комбинация для wbstream: `wbstream + vp8channel`**. `wbstream + datachannel` быстрый, но в обычном guest/anonymous flow WB Stream выдаёт токены с `canPublishData=false`; без выдачи участникам модераторских/permission прав DC не маршрутизирует данные и поэтому не рекомендуется.
+
+Скорость по убыванию: `datachannel` > `vp8channel` > `seichannel` > `videochannel`
+
+---
+
+## Обязательные поля YAML конфига
+
+| YAML поле | Что вводить |
+|-----------|-------------|
+| `mode` | `srv` на сервере, `cnc` на клиенте, `gen` для генерации Room ID |
+| `auth.provider` | `telemost`, `jazz` или `wbstream` |
+| `net.transport` | `datachannel`, `vp8channel`, `seichannel` или `videochannel` |
+| `room.id` | Room ID |
+| `crypto.key` | Ключ шифрования hex 64 символа. Генерация: `openssl rand -hex 32` |
+| `link` | Всегда `direct` |
+| `data` | Всегда `data` |
+| `net.dns` | DNS-сервер, например `1.1.1.1:53` |
+
+---
+
+## Необязательные поля
+
+| YAML поле | Описание |
+|-----------|----------|
+| `debug` | `true` для подробных логов соединений |
+
+---
+
+## mode: gen
+
+Генерирует Room ID заранее, не запуская сервер. Поддерживается только для `jazz`. Для `wbstream` создавай руму вручную через [stream.wb.ru](https://stream.wb.ru) (автогенерация отключена со стороны WB).
+
+**Обязательные поля:**
+
+| YAML поле | Описание |
+|-----------|----------|
+| `auth.provider` | `jazz` |
+| `net.dns` | DNS-сервер |
+| `gen.amount` | Количество комнат |
+
+```yaml
+# gen.yaml
+mode: gen
+auth:
+  provider: jazz
+net:
+  dns: "1.1.1.1:53"
+gen:
+  amount: 3
+```
+
+```sh
+./olcrtc gen.yaml
+# room-id-1
+# room-id-2
+# room-id-3
+```
+
+---
+
+## Поля только для сервера (`mode: srv`)
+
+| YAML поле | Описание |
+|-----------|----------|
+| `socks.proxy_addr` | Адрес SOCKS5-прокси для исходящего трафика сервера |
+| `socks.proxy_port` | Порт этого прокси |
+
+---
+
+## Поля только для клиента (`mode: cnc`)
+
+| YAML поле | Описание | По умолчанию |
+|-----------|----------|:------------:|
+| `socks.host` | На каком адресе поднять SOCKS5 | `127.0.0.1` |
+| `socks.port` | На каком порту поднять SOCKS5 | `1080` |
+| `socks.user` | Логин для входящих SOCKS5-подключений (необязательно) | - |
+| `socks.pass` | Пароль для входящих SOCKS5-подключений (необязательно) | - |
+
+Если `socks.user` не задан - аутентификация отключена (любой локальный клиент может подключиться).  
+Если задан - клиент принимает только подключения с правильным логином и паролем (RFC 1929).
+
+---
+
+## datachannel
+
+Дополнительных полей нет - всё по умолчанию.
+
+---
+
+## vp8channel
+
+**Рекомендуется: `fps: 60`, `batch_size: 64`** (числа лучше чётные, больший batch = выше скорость)
+
+| YAML поле | Описание | По умолчанию |
+|-----------|----------|:------------:|
+| `vp8.fps` | FPS VP8 потока | `25` |
+| `vp8.batch_size` | Кадров за тик | `1` |
+
+---
+
+## seichannel
+
+**Рекомендуется: `fps: 60`, `batch_size: 64`, `fragment_size: 900`, `ack_timeout_ms: 2000`**
+
+| YAML поле | Описание | По умолчанию |
+|-----------|----------|:------------:|
+| `sei.fps` | FPS H264 потока | `60` |
+| `sei.batch_size` | Кадров за тик | `64` |
+| `sei.fragment_size` | Размер фрагмента в байтах | `900` |
+| `sei.ack_timeout_ms` | Таймаут ACK в миллисекундах | `2000` |
+
+---
+
+## videochannel
+
+**Рекомендуется: `codec: qrcode`, `width: 1080`, `height: 1080`, `fps: 60`, `bitrate: "5000k"`, `hw: none`**
+
+| YAML поле | Описание | По умолчанию |
+|-----------|----------|:------------:|
+| `video.codec` | `qrcode` или `tile` | `qrcode` |
+| `video.width` | Ширина в пикселях | `1920` |
+| `video.height` | Высота в пикселях | `1080` |
+| `video.fps` | FPS | `30` |
+| `video.bitrate` | Битрейт, например `"2M"` или `"5000k"` | `"2M"` |
+| `video.hw` | Аппаратное ускорение: `none` или `nvenc` | `none` |
+| `video.qr_recovery` | Коррекция ошибок QR: `low` / `medium` / `high` / `highest` | `low` |
+| `video.qr_size` | Размер фрагмента QR в байтах, `0` = авто | `0` |
+| `video.tile_module` | Размер тайла в пикселях 1..270 (только `tile`) | `4` |
+| `video.tile_rs` | Reed-Solomon паритет % 0..200 (только `tile`) | `20` |
+| `ffmpeg` | Путь к исполняемому файлу ffmpeg | `ffmpeg` |
+
+Для codec `tile` нужно точно `1080x1080`.
+
+---
+
+## Готовые конфиги
+
+### wbstream + datachannel (не рекомендуется без модераторских прав)
+
+WB Stream DataChannel работает только когда участникам выданы права на отправку data packets (`canPublishData=true`), обычно через модераторские/permission права комнаты. В обычном guest flow WB Stream может выдавать токены с `canPublishData=false`, тогда соединение поднимется, но данные через DC не пойдут. Для обычного использования выбирай `vp8channel`, `seichannel` или `videochannel`.
+
+```yaml
+# room ID нужно создать вручную через https://stream.wb.ru
+
+# server.yaml
+mode: srv
+link: direct
+auth:
+  provider: wbstream
+room:
+  id: "<room-id-со-stream.wb.ru>"
+crypto:
+  key: "<hex-key>"
+net:
+  transport: datachannel
+  dns: "1.1.1.1:53"
+data: data
+```
+
+```yaml
+# client.yaml
+mode: cnc
+link: direct
+auth:
+  provider: wbstream
+room:
+  id: "<room-id-со-stream.wb.ru>"
+crypto:
+  key: "<hex-key>"
+net:
+  transport: datachannel
+  dns: "1.1.1.1:53"
+socks:
+  host: "127.0.0.1"
+  port: 8808
+data: data
+```
+
+### wbstream + datachannel + SOCKS5 аутентификация (только с модераторскими правами)
+
+```yaml
+# client.yaml с логином и паролем на прокси
+mode: cnc
+link: direct
+auth:
+  provider: wbstream
+room:
+  id: "<room-id>"
+crypto:
+  key: "<hex-key>"
+net:
+  transport: datachannel
+  dns: "1.1.1.1:53"
+socks:
+  host: "127.0.0.1"
+  port: 8808
+  user: myuser
+  pass: mypass
+data: data
+```
+
+Использование:
+```sh
+curl --socks5-hostname myuser:mypass@127.0.0.1:8808 https://icanhazip.com
+# или
+export all_proxy=socks5h://myuser:mypass@127.0.0.1:8808
+```
+
+---
+
+### telemost + vp8channel
+
+```yaml
+# server.yaml
+mode: srv
+link: direct
+auth:
+  provider: telemost
+room:
+  id: "<room-id>"
+crypto:
+  key: "<hex-key>"
+net:
+  transport: vp8channel
+  dns: "1.1.1.1:53"
+vp8:
+  fps: 60
+  batch_size: 64
+data: data
+```
+
+```yaml
+# client.yaml
+mode: cnc
+link: direct
+auth:
+  provider: telemost
+room:
+  id: "<room-id>"
+crypto:
+  key: "<hex-key>"
+net:
+  transport: vp8channel
+  dns: "1.1.1.1:53"
+socks:
+  host: "127.0.0.1"
+  port: 8808
+vp8:
+  fps: 60
+  batch_size: 64
+data: data
+```
+
+### telemost + seichannel
+
+```yaml
+# server.yaml
+mode: srv
+link: direct
+auth:
+  provider: telemost
+room:
+  id: "<room-id>"
+crypto:
+  key: "<hex-key>"
+net:
+  transport: seichannel
+  dns: "1.1.1.1:53"
+sei:
+  fps: 60
+  batch_size: 64
+  fragment_size: 900
+  ack_timeout_ms: 2000
+data: data
+```
+
+```yaml
+# client.yaml
+mode: cnc
+link: direct
+auth:
+  provider: telemost
+room:
+  id: "<room-id>"
+crypto:
+  key: "<hex-key>"
+net:
+  transport: seichannel
+  dns: "1.1.1.1:53"
+socks:
+  host: "127.0.0.1"
+  port: 8808
+sei:
+  fps: 60
+  batch_size: 64
+  fragment_size: 900
+  ack_timeout_ms: 2000
+data: data
+```
+
+### telemost + videochannel (крайний случай)
+
+```yaml
+# server.yaml
+mode: srv
+link: direct
+auth:
+  provider: telemost
+room:
+  id: "<room-id>"
+crypto:
+  key: "<hex-key>"
+net:
+  transport: videochannel
+  dns: "1.1.1.1:53"
+video:
+  codec: qrcode
+  width: 1080
+  height: 1080
+  fps: 60
+  bitrate: "5000k"
+  hw: none
+data: data
+```
+
+```yaml
+# client.yaml
+mode: cnc
+link: direct
+auth:
+  provider: telemost
+room:
+  id: "<room-id>"
+crypto:
+  key: "<hex-key>"
+net:
+  transport: videochannel
+  dns: "1.1.1.1:53"
+socks:
+  host: "127.0.0.1"
+  port: 8808
+video:
+  codec: qrcode
+  width: 1080
+  height: 1080
+  fps: 60
+  bitrate: "5000k"
+  hw: none
+data: data
+```
+
+---
+
+Подробнее про запуск: [Быстрый старт](fast.md) · [Мануальная сборка](manual.md)
+
+URI-формат для клиентов: [uri.md](uri.md) · [Формат подписки](sub.md)

@@ -25,12 +25,10 @@ type Link interface {
 
 // Config holds common link configuration.
 type Config struct {
-	Transport string
-	Carrier   string
-	RoomURL   string
-	// Engine, URL, Token are forwarded to carriers that bypass the legacy
-	// auth flow (the "none" auth carrier accessing an engine directly).
-	// Mobile carriers (jazz/telemost/wbstream) leave these empty.
+	Transport       string
+	Carrier         string
+	RoomURL         string
+	// Engine, URL, Token are forwarded for the "none" auth carrier.
 	Engine          string
 	URL             string
 	Token           string
@@ -61,8 +59,7 @@ type Config struct {
 // Factory creates a link instance.
 type Factory func(ctx context.Context, cfg Config) (Link, error)
 
-//nolint:gochecknoglobals
-var registry = make(map[string]Factory)
+var registry = make(map[string]Factory) //nolint:gochecknoglobals // package-level state intentional
 
 // Register adds a link factory to the registry.
 func Register(name string, factory Factory) {

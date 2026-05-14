@@ -5,16 +5,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"time"
 
+	"github.com/openlibrecommunity/olcrtc/internal/auth"
 	"github.com/openlibrecommunity/olcrtc/internal/carrier"
 	"github.com/openlibrecommunity/olcrtc/internal/carrier/builtin"
 	"github.com/openlibrecommunity/olcrtc/internal/client"
 	"github.com/openlibrecommunity/olcrtc/internal/link"
 	"github.com/openlibrecommunity/olcrtc/internal/link/direct"
 	"github.com/openlibrecommunity/olcrtc/internal/logger"
+	"github.com/openlibrecommunity/olcrtc/internal/names"
 	"github.com/openlibrecommunity/olcrtc/internal/server"
-	subserver "github.com/openlibrecommunity/olcrtc/internal/subscription/server"
-	"github.com/openlibrecommunity/olcrtc/internal/subscription/store"
 	"github.com/openlibrecommunity/olcrtc/internal/transport"
 	"github.com/openlibrecommunity/olcrtc/internal/transport/datachannel"
 	"github.com/openlibrecommunity/olcrtc/internal/transport/seichannel"
@@ -23,18 +25,30 @@ import (
 )
 
 const (
-	modeSRV = "srv"
-	modeCNC = "cnc"
+	modeSRV          = "srv"
+	modeCNC          = "cnc"
+	modeGen          = "gen"
+	authJazz         = "jazz"
+	authNone         = "none"
+	transportVideo   = "videochannel"
+	transportVP8     = "vp8channel"
+	transportSEI     = "seichannel"
+	videoCodecQRCode = "qrcode"
+	videoCodecTile   = "tile"
 )
 
 var (
 	// ErrRoomIDRequired indicates that a room id is required for the selected carrier.
 	ErrRoomIDRequired = errors.New("room ID required (use -id <id>)")
 	// ErrModeRequired indicates that mode is not one of the supported values.
-	ErrModeRequired = errors.New("mode required (use -mode srv or -mode cnc)")
-	// ErrCarrierRequired indicates that no carrier was selected.
-	ErrCarrierRequired = errors.New(
-		"carrier required (use -carrier telemost, -carrier jazz or -carrier wbstream)")
+	ErrModeRequired = errors.New("mode required (use -mode srv, -mode cnc or -mode gen)")
+	// ErrAmountRequired indicates that -amount is required for gen mode.
+	ErrAmountRequired = errors.New("amount required for gen mode (use -amount <n>)")
+	// ErrAuthRequired indicates that no auth provider was selected.
+	ErrAuthRequired = errors.New(
+		"auth provider required (use -auth telemost, -auth jazz, -auth wbstream or -auth none)")
+	// ErrURLRequired indicates that -url must be provided when the auth provider has no default URL.
+	ErrURLRequired = errors.New("SFU URL required (use -url wss://...)")
 	// ErrUnsupportedCarrier indicates that carrier is not registered.
 	ErrUnsupportedCarrier = errors.New("unsupported carrier")
 	// ErrUnsupportedLink indicates that link is not registered.
@@ -95,18 +109,19 @@ type Config struct {
 	Mode            string
 	Link            string
 	Transport       string
-	Carrier         string
+	Auth            string
+	Engine          string
+	URL             string
+	Token           string
 	RoomID          string
 	KeyHex          string
 	SOCKSHost       string
 	SOCKSPort       int
+	SOCKSUser       string
+	SOCKSPass       string
 	DNSServer       string
 	SOCKSProxyAddr  string
 	SOCKSProxyPort  int
-	SOCKSProxyUser  string
-	SOCKSProxyPass  string
-	WarpProxyAddr   string
-	WarpProxyPort   int
 	VideoWidth      int
 	VideoHeight     int
 	VideoFPS        int
@@ -119,17 +134,14 @@ type Config struct {
 	VideoTileRS     int
 	VP8FPS          int
 	VP8BatchSize    int
-	SubEnabled      bool
-	SubPort         int
-	SubDBPath       string
-	SubAPIToken     string
 	SEIFPS          int
 	SEIBatchSize    int
 	SEIFragmentSize int
 	SEIAckTimeoutMS int
+	Amount          int
 }
 
-// RegisterDefaults registers built-in providers and transports.
+// RegisterDefaults registers built-in carriers and transports.
 func RegisterDefaults() {
 	builtin.Register()
 	link.Register("direct", direct.New)
@@ -139,12 +151,35 @@ func RegisterDefaults() {
 	transport.Register("vp8channel", vp8channel.New)
 }
 
+// ApplyAuthDefaults fills in Engine and URL from the auth provider when they are not set explicitly.
+// For -auth none the fields are left untouched (the caller supplies them directly).
+// Returns an error if the auth provider has no default URL and -url was not given.
+func ApplyAuthDefaults(cfg Config) (Config, error) {
+	if cfg.Auth == authNone || cfg.Auth == "" {
+		return cfg, nil
+	}
+	p, _ := auth.Get(cfg.Auth) // unknown auth is caught later by validateAuth
+	if p == nil {
+		return cfg, nil
+	}
+	if cfg.Engine == "" {
+		cfg.Engine = p.Engine()
+	}
+	if cfg.URL == "" {
+		cfg.URL = p.DefaultServiceURL()
+	}
+	if cfg.URL == "" {
+		return cfg, fmt.Errorf("%w: auth provider %q has no default URL", ErrURLRequired, cfg.Auth)
+	}
+	return cfg, nil
+}
+
 // Validate verifies that the runtime config refers to registered components and all required fields are present.
 func Validate(cfg Config) error {
 	if err := validateMode(cfg); err != nil {
 		return err
 	}
-	if err := validateCarrier(cfg); err != nil {
+	if err := validateAuth(cfg); err != nil {
 		return err
 	}
 	if err := validateLink(cfg); err != nil {
@@ -163,50 +198,46 @@ func Validate(cfg Config) error {
 }
 
 func validateMode(cfg Config) error {
-	if cfg.Mode == "" || (cfg.Mode != modeSRV && cfg.Mode != modeCNC) {
+	switch cfg.Mode {
+	case modeSRV, modeCNC, modeGen:
+		return nil
+	default:
 		return ErrModeRequired
 	}
-	return nil
 }
 
-func validateCarrier(cfg Config) error {
-	if cfg.Carrier == "" {
-		return ErrCarrierRequired
+func validateAuth(cfg Config) error {
+	if cfg.Auth == "" {
+		return ErrAuthRequired
 	}
-	for _, c := range carrier.Available() {
-		if cfg.Carrier == c {
-			return nil
-		}
+	if !slices.Contains(carrier.Available(), cfg.Auth) {
+		return fmt.Errorf("%w: %s (available: %v)", ErrUnsupportedCarrier, cfg.Auth, carrier.Available())
 	}
-	return fmt.Errorf("%w: %s (available: %v)", ErrUnsupportedCarrier, cfg.Carrier, carrier.Available())
+	return nil
 }
 
 func validateLink(cfg Config) error {
 	if cfg.Link == "" {
 		return ErrLinkRequired
 	}
-	for _, l := range link.Available() {
-		if cfg.Link == l {
-			return nil
-		}
+	if !slices.Contains(link.Available(), cfg.Link) {
+		return fmt.Errorf("%w: %s (available: %v)", ErrUnsupportedLink, cfg.Link, link.Available())
 	}
-	return fmt.Errorf("%w: %s (available: %v)", ErrUnsupportedLink, cfg.Link, link.Available())
+	return nil
 }
 
 func validateTransportRegistration(cfg Config) error {
 	if cfg.Transport == "" {
 		return ErrTransportRequired
 	}
-	for _, t := range transport.Available() {
-		if cfg.Transport == t {
-			return nil
-		}
+	if !slices.Contains(transport.Available(), cfg.Transport) {
+		return fmt.Errorf("%w: %s (available: %v)", ErrUnsupportedTransport, cfg.Transport, transport.Available())
 	}
-	return fmt.Errorf("%w: %s (available: %v)", ErrUnsupportedTransport, cfg.Transport, transport.Available())
+	return nil
 }
 
 func validateCommon(cfg Config) error {
-	if cfg.RoomID == "" && cfg.Carrier != "jazz" {
+	if cfg.RoomID == "" && cfg.Auth != authJazz && cfg.Auth != authNone {
 		return ErrRoomIDRequired
 	}
 	if cfg.KeyHex == "" {
@@ -220,11 +251,11 @@ func validateCommon(cfg Config) error {
 
 func validateTransportConfig(cfg Config) error {
 	switch cfg.Transport {
-	case "videochannel":
+	case transportVideo:
 		return validateVideoChannel(cfg)
-	case "vp8channel":
+	case transportVP8:
 		return validateVP8Channel(cfg)
-	case "seichannel":
+	case transportSEI:
 		return validateSEIChannel(cfg)
 	default:
 		return nil
@@ -232,10 +263,10 @@ func validateTransportConfig(cfg Config) error {
 }
 
 func validateVideoCodec(cfg Config) error {
-	if cfg.VideoCodec != "" && cfg.VideoCodec != "qrcode" && cfg.VideoCodec != "tile" {
+	if cfg.VideoCodec != "" && cfg.VideoCodec != videoCodecQRCode && cfg.VideoCodec != videoCodecTile {
 		return ErrVideoCodecInvalid
 	}
-	if cfg.VideoCodec == "tile" && (cfg.VideoWidth != 1080 || cfg.VideoHeight != 1080) {
+	if cfg.VideoCodec == videoCodecTile && (cfg.VideoWidth != 1080 || cfg.VideoHeight != 1080) {
 		return ErrTileCodecDimensions
 	}
 	return nil
@@ -301,58 +332,19 @@ func validateModeConfig(cfg Config) error {
 
 // Run starts the configured mode.
 func Run(ctx context.Context, cfg Config) error {
-	roomURL := buildRoomURL(cfg.Carrier, cfg.RoomID)
+	roomURL := cfg.RoomID
 
 	switch cfg.Mode {
 	case modeSRV:
-		if cfg.SubEnabled {
-			if err := startSubscriptionServer(ctx, cfg); err != nil {
-				logger.Warnf("subscription server failed to start (continuing without it): %v", err)
-			}
-		}
-		if err := server.Run(
-			ctx,
-			cfg.Link,
-			cfg.Transport,
-			cfg.Carrier,
-			roomURL,
-			cfg.KeyHex,
-			cfg.DNSServer,
-			cfg.SOCKSProxyAddr,
-			cfg.SOCKSProxyPort,
-			cfg.SOCKSProxyUser,
-			cfg.SOCKSProxyPass,
-			cfg.WarpProxyAddr,
-			cfg.WarpProxyPort,
-			cfg.VideoWidth,
-			cfg.VideoHeight,
-			cfg.VideoFPS,
-			cfg.VideoBitrate,
-			cfg.VideoHW,
-			cfg.VideoQRSize,
-			cfg.VideoQRRecovery,
-			cfg.VideoCodec,
-			cfg.VideoTileModule,
-			cfg.VideoTileRS,
-			cfg.VP8FPS,
-			cfg.VP8BatchSize,
-			cfg.SEIFPS,
-			cfg.SEIBatchSize,
-			cfg.SEIFragmentSize,
-			cfg.SEIAckTimeoutMS,
-		); err != nil {
-			return fmt.Errorf("server: %w", err)
-		}
-		return nil
-	case modeCNC:
-		if err := client.Run(ctx, client.Config{
+		if err := server.Run(ctx, server.Config{
 			Link:            cfg.Link,
 			Transport:       cfg.Transport,
-			Carrier:         cfg.Carrier,
+			Carrier:         cfg.Auth,
 			RoomURL:         roomURL,
 			KeyHex:          cfg.KeyHex,
-			LocalAddr:       fmt.Sprintf("%s:%d", cfg.SOCKSHost, cfg.SOCKSPort),
 			DNSServer:       cfg.DNSServer,
+			SOCKSProxyAddr:  cfg.SOCKSProxyAddr,
+			SOCKSProxyPort:  cfg.SOCKSProxyPort,
 			VideoWidth:      cfg.VideoWidth,
 			VideoHeight:     cfg.VideoHeight,
 			VideoFPS:        cfg.VideoFPS,
@@ -369,6 +361,52 @@ func Run(ctx context.Context, cfg Config) error {
 			SEIBatchSize:    cfg.SEIBatchSize,
 			SEIFragmentSize: cfg.SEIFragmentSize,
 			SEIAckTimeoutMS: cfg.SEIAckTimeoutMS,
+			Engine:          cfg.Engine,
+			URL:             cfg.URL,
+			Token:           cfg.Token,
+			OnSessionOpen: func(sessionID, deviceID string, claims map[string]any) {
+				logger.Infof("session opened: id=%s device=%s claims=%v", sessionID, deviceID, claims)
+			},
+			OnSessionClose: func(sessionID, reason string) {
+				logger.Infof("session closed: id=%s reason=%s", sessionID, reason)
+			},
+			OnTraffic: func(sessionID, addr string, bytesIn, bytesOut uint64) {
+				logger.Infof("traffic: session=%s addr=%s in=%d out=%d", sessionID, addr, bytesIn, bytesOut)
+			},
+		}); err != nil {
+			return fmt.Errorf("server: %w", err)
+		}
+		return nil
+	case modeCNC:
+		if err := client.Run(ctx, client.Config{
+			Link:            cfg.Link,
+			Transport:       cfg.Transport,
+			Carrier:         cfg.Auth,
+			RoomURL:         roomURL,
+			KeyHex:          cfg.KeyHex,
+			LocalAddr:       fmt.Sprintf("%s:%d", cfg.SOCKSHost, cfg.SOCKSPort),
+			DNSServer:       cfg.DNSServer,
+			SOCKSUser:       cfg.SOCKSUser,
+			SOCKSPass:       cfg.SOCKSPass,
+			VideoWidth:      cfg.VideoWidth,
+			VideoHeight:     cfg.VideoHeight,
+			VideoFPS:        cfg.VideoFPS,
+			VideoBitrate:    cfg.VideoBitrate,
+			VideoHW:         cfg.VideoHW,
+			VideoQRSize:     cfg.VideoQRSize,
+			VideoQRRecovery: cfg.VideoQRRecovery,
+			VideoCodec:      cfg.VideoCodec,
+			VideoTileModule: cfg.VideoTileModule,
+			VideoTileRS:     cfg.VideoTileRS,
+			VP8FPS:          cfg.VP8FPS,
+			VP8BatchSize:    cfg.VP8BatchSize,
+			SEIFPS:          cfg.SEIFPS,
+			SEIBatchSize:    cfg.SEIBatchSize,
+			SEIFragmentSize: cfg.SEIFragmentSize,
+			SEIAckTimeoutMS: cfg.SEIAckTimeoutMS,
+			Engine:          cfg.Engine,
+			URL:             cfg.URL,
+			Token:           cfg.Token,
 		}); err != nil {
 			return fmt.Errorf("client: %w", err)
 		}
@@ -378,44 +416,70 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 }
 
-func startSubscriptionServer(ctx context.Context, cfg Config) error {
-	dbPath := cfg.SubDBPath
-	if dbPath == "" {
-		dbPath = "data/subscriptions.db"
+// ValidateGen validates that the config contains enough fields to run gen mode.
+func ValidateGen(cfg Config) error {
+	if cfg.Auth == "" {
+		return ErrAuthRequired
 	}
-	port := cfg.SubPort
-	if port == 0 {
-		port = 2096
+	if !slices.Contains(carrier.Available(), cfg.Auth) {
+		return fmt.Errorf("%w: %s (available: %v)", ErrUnsupportedCarrier, cfg.Auth, carrier.Available())
 	}
-
-	st, err := store.Open(dbPath)
-	if err != nil {
-		return fmt.Errorf("open subscription db: %w", err)
+	if cfg.DNSServer == "" {
+		return ErrDNSServerRequired
 	}
-
-	srv := subserver.New(st, port, cfg.SubAPIToken)
-	go func() {
-		if err := srv.Start(ctx); err != nil {
-			logger.Errorf("subscription server stopped: %v", err)
-		}
-		_ = st.Close()
-	}()
-
+	if cfg.Amount < 1 {
+		return ErrAmountRequired
+	}
 	return nil
 }
 
-func buildRoomURL(carrierName, roomID string) string {
-	switch carrierName {
-	case "telemost":
-		return "https://telemost.yandex.ru/j/" + roomID
-	case "jazz":
-		if roomID == "" {
-			return "any"
+const (
+	genMaxAttempts = 5
+	genRetryDelay  = 2 * time.Second
+)
+
+func genRetry(ctx context.Context, fn func(context.Context) error) error {
+	var lastErr error
+	for attempt := range genMaxAttempts {
+		lastErr = fn(ctx)
+		if lastErr == nil {
+			return nil
 		}
-		return roomID
-	case "wbstream":
-		return roomID
-	default:
-		return roomID
+		if attempt < genMaxAttempts-1 {
+			select {
+			case <-ctx.Done():
+				return fmt.Errorf("context canceled: %w", ctx.Err())
+			case <-time.After(genRetryDelay):
+			}
+		}
 	}
+	return lastErr
+}
+
+// Gen creates cfg.Amount rooms for the configured auth provider and writes each room ID to out.
+func Gen(ctx context.Context, cfg Config, out func(string)) error {
+	p, err := auth.Get(cfg.Auth)
+	if err != nil {
+		return fmt.Errorf("%w: %s", ErrUnsupportedCarrier, cfg.Auth)
+	}
+	creator, ok := p.(auth.RoomCreator)
+	if !ok {
+		return fmt.Errorf("%w: %s does not support room generation", ErrUnsupportedCarrier, cfg.Auth)
+	}
+	for i := range cfg.Amount {
+		var roomID string
+		err := genRetry(ctx, func(ctx context.Context) error {
+			var genErr error
+			roomID, genErr = creator.CreateRoom(ctx, auth.Config{Name: names.Generate()})
+			if genErr != nil {
+				return fmt.Errorf("CreateRoom: %w", genErr)
+			}
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("gen room %d: %w", i+1, err)
+		}
+		out(roomID)
+	}
+	return nil
 }

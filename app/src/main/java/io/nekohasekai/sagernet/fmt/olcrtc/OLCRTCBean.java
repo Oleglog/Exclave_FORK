@@ -43,6 +43,8 @@ public class OLCRTCBean extends AbstractBean {
     public String provider;
     public String transport;
     public String roomId;
+    public String roomPassword;
+    public String clientId;
     public String keyHex;
     public String dnsServer;
     public int vp8Fps;
@@ -57,6 +59,8 @@ public class OLCRTCBean extends AbstractBean {
         if (provider == null || provider.isEmpty()) provider = PROVIDER_TELEMOST;
         if (transport == null || transport.isEmpty()) transport = TRANSPORT_DATACHANNEL;
         if (roomId == null) roomId = "";
+        if (roomPassword == null) roomPassword = "";
+        if (clientId == null) clientId = "";
         if (keyHex == null) keyHex = "";
         if (dnsServer == null || dnsServer.isEmpty()) dnsServer = "1.1.1.1:53";
         if (vp8Fps <= 0) vp8Fps = 60;
@@ -66,7 +70,7 @@ public class OLCRTCBean extends AbstractBean {
 
     @Override
     public void serialize(ByteBufferOutput output) {
-        output.writeInt(2);
+        output.writeInt(4);
         super.serialize(output);
         output.writeString(provider);
         output.writeString(roomId);
@@ -78,6 +82,10 @@ public class OLCRTCBean extends AbstractBean {
         output.writeInt(vp8BatchSize);
         // v2 fields:
         output.writeInt(keepaliveIntervalSec);
+        // v3 fields:
+        output.writeString(roomPassword == null ? "" : roomPassword);
+        // v4 fields:
+        output.writeString(clientId == null ? "" : clientId);
     }
 
     @Override
@@ -95,6 +103,16 @@ public class OLCRTCBean extends AbstractBean {
         }
         if (version >= 2) {
             keepaliveIntervalSec = input.readInt();
+        }
+        if (version >= 3) {
+            roomPassword = input.readString();
+        } else {
+            roomPassword = "";
+        }
+        if (version >= 4) {
+            clientId = input.readString();
+        } else {
+            clientId = "";
         }
     }
 

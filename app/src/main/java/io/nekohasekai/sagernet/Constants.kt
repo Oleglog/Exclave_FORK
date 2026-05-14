@@ -252,11 +252,21 @@ object Key {
     const val SERVER_OLCRTC_PROVIDER = "serverOlcrtcProvider"
     const val SERVER_OLCRTC_TRANSPORT = "serverOlcrtcTransport"
     const val SERVER_OLCRTC_ROOM_ID = "serverOlcrtcRoomId"
+    const val SERVER_OLCRTC_ROOM_PASSWORD = "serverOlcrtcRoomPassword"
     const val SERVER_OLCRTC_KEY_HEX = "serverOlcrtcKeyHex"
     const val SERVER_OLCRTC_DNS_SERVER = "serverOlcrtcDnsServer"
     const val SERVER_OLCRTC_VP8_FPS = "serverOlcrtcVp8Fps"
     const val SERVER_OLCRTC_VP8_BATCH_SIZE = "serverOlcrtcVp8BatchSize"
     const val SERVER_OLCRTC_KEEPALIVE_INTERVAL = "serverOlcrtcKeepaliveInterval"
+
+    /**
+     * Per-profile olcRTC client identifier. Issued by the server admin panel
+     * (see requirements-server.md S8) and delivered to the client via the
+     * URI/QR `client_id=<uuid>` query parameter. The client SHALL NOT
+     * generate this value locally — vp8channel uses fnv32(clientID) as the
+     * RTP binding token, so a mismatched clientID silently drops VP8 frames.
+     */
+    const val SERVER_OLCRTC_CLIENT_ID = "serverOlcrtcClientId"
 
     const val SERVER_SING_UOT_CATEGORY = "serverSingUotCategory"
     const val SERVER_SING_MUX_CATEGORY = "serverSingMuxCategory"

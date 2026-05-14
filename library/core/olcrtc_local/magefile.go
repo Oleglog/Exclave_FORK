@@ -89,6 +89,22 @@ func Test() error {
 	return sh.RunV(goexe, "test", "-race", "-count=1", "./...")
 }
 
+// E2E runs end-to-end tests from internal/e2e.
+func E2E() error {
+	args := []string{"test", "-race", "-count=1", "-v", "-timeout", "120s"}
+	if carriers := os.Getenv("E2E_CARRIERS"); carriers != "" {
+		args = append(args, "-olcrtc.real-e2e=true", "-olcrtc.real-carriers="+carriers)
+	}
+	if transports := os.Getenv("E2E_TRANSPORTS"); transports != "" {
+		args = append(args, "-olcrtc.real-transports="+transports)
+	}
+	if timeout := os.Getenv("E2E_TIMEOUT"); timeout != "" {
+		args = append(args, "-olcrtc.real-timeout="+timeout)
+	}
+	args = append(args, "./internal/e2e/...")
+	return sh.RunV(goexe, args...)
+}
+
 // Deps downloads and tidies Go module dependencies.
 func Deps() error {
 	if err := sh.RunV(goexe, "mod", "download"); err != nil {

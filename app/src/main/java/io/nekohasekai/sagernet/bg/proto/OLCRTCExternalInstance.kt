@@ -92,6 +92,29 @@ class OLCRTCExternalInstance(
         }
         val transport = bean.transport.ifBlank { OLCRTCBean.TRANSPORT_DATACHANNEL }
 
+        // clientID MUST come from the URI/QR (server admin panel issues it via
+        // the `client_id=` query parameter — see requirements-server.md S8).
+        // The server uses fnv32(clientID) as the vp8channel binding token, so
+        // a locally generated UUID would silently desync VP8 RTP frames.
+        // Bail out early with a human-readable error instead of starting Go
+        // with an empty clientID (which mobile.go rejects with errClientIDRequired
+        // anyway, but the message would be opaque).
+        val clientId = bean.clientId.orEmpty()
+        if (clientId.isEmpty()) {
+            throw IllegalStateException(
+                "Profile is missing Client ID. Re-import the URI from the server admin panel.",
+            )
+        }
+
+        // SaluteJazz auth requires the room URL in the form "<roomId>:<password>".
+        // For the other carriers we forward the bare roomId as before.
+        val roomPassword = bean.roomPassword.orEmpty()
+        val effectiveRoomId = if (carrier == OLCRTCBean.PROVIDER_JAZZ && roomPassword.isNotEmpty()) {
+            "${bean.roomId}:$roomPassword"
+        } else {
+            bean.roomId
+        }
+
         Mobile.setTransport(transport)
         Mobile.setLink("direct")
 
@@ -101,11 +124,16 @@ class OLCRTCExternalInstance(
                 bean.vp8BatchSize.toLong(),
             )
         }
+        // SEI defaults (FPS / batch / fragment / ack timeout) are baked into
+        // the Go-side mobileConfig (30/8/900/1500). We don't expose them in
+        // the Kotlin UI yet, so no setSEIOptions call is needed here; the
+        // Go layer will apply the defaults when transport == "seichannel".
 
         Mobile.startWithTransport(
             carrier,
             transport,
-            bean.roomId,
+            effectiveRoomId,
+            clientId,
             bean.keyHex,
             port.toLong(),
             username,

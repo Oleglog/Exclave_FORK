@@ -4,8 +4,6 @@ package carrier
 import (
 	"context"
 	"errors"
-
-	"github.com/openlibrecommunity/olcrtc/internal/provider"
 )
 
 var (
@@ -46,9 +44,7 @@ type Config struct {
 	DNSServer string
 	ProxyAddr string
 	ProxyPort int
-	// URL, Token, and Engine are used by the "none" auth carrier (direct
-	// engine access). Mobile carriers (jazz/telemost/wbstream) leave them
-	// empty.
+	// URL, Token, and Engine are used by the "none" auth carrier (direct engine access).
 	URL    string
 	Token  string
 	Engine string
@@ -57,30 +53,11 @@ type Config struct {
 // Factory creates a new carrier session.
 type Factory func(ctx context.Context, cfg Config) (Session, error)
 
-//nolint:gochecknoglobals
-var registry = make(map[string]Factory)
+var registry = make(map[string]Factory) //nolint:gochecknoglobals // package-level state intentional
 
 // Register adds a carrier factory to the registry.
 func Register(name string, factory Factory) {
 	registry[name] = factory
-}
-
-// RegisterLegacy adapts an existing provider factory into the carrier registry.
-func RegisterLegacy(name string, factory provider.Factory) {
-	Register(name, func(ctx context.Context, cfg Config) (Session, error) {
-		legacy, err := factory(ctx, provider.Config{
-			RoomURL:   cfg.RoomURL,
-			Name:      cfg.Name,
-			OnData:    cfg.OnData,
-			DNSServer: cfg.DNSServer,
-			ProxyAddr: cfg.ProxyAddr,
-			ProxyPort: cfg.ProxyPort,
-		})
-		if err != nil {
-			return nil, err
-		}
-		return &legacySession{provider: legacy}, nil
-	})
 }
 
 // New creates a carrier session by name.

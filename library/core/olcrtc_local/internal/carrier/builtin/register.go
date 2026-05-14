@@ -2,15 +2,18 @@
 package builtin
 
 import (
-	"github.com/openlibrecommunity/olcrtc/internal/carrier"
-	"github.com/openlibrecommunity/olcrtc/internal/provider/jazz"
-	"github.com/openlibrecommunity/olcrtc/internal/provider/telemost"
-	"github.com/openlibrecommunity/olcrtc/internal/provider/wbstream"
+	authSaluteJazz "github.com/openlibrecommunity/olcrtc/internal/auth/salutejazz"
+	authTelemost "github.com/openlibrecommunity/olcrtc/internal/auth/telemost"
+	authWBStream "github.com/openlibrecommunity/olcrtc/internal/auth/wbstream"
+	_ "github.com/openlibrecommunity/olcrtc/internal/engine/goolom"     // engine registration via init
+	_ "github.com/openlibrecommunity/olcrtc/internal/engine/livekit"    // engine registration via init
+	_ "github.com/openlibrecommunity/olcrtc/internal/engine/salutejazz" // engine registration via init
 )
 
-// Register wires the built-in legacy carriers into the carrier registry.
+// Register wires the built-in carriers into the carrier registry.
 func Register() {
-	carrier.RegisterLegacy("jazz", jazz.New)
-	carrier.RegisterLegacy("telemost", telemost.New)
-	carrier.RegisterLegacy("wbstream", wbstream.New)
+	registerEngineAuth("wbstream", authWBStream.Provider{})
+	registerEngineAuth("jazz", authSaluteJazz.Provider{})
+	registerEngineAuth("telemost", authTelemost.Provider{})
+	registerDirect("none")
 }

@@ -1,3 +1,28 @@
+/*
+ПРИВЕТ ЯНДЕКС ШАЛАВА БЛЯТЬ КОТОРАЯ СЕЙЧАС ЧИТАЕТ ЭТОТ КОД.
+КАЖДЫЙ РАЗ КОГДА ВЫ БЛЯТЬ ЧТООТ ФИКСИТЕ МЫ БЛЯТЬ МЫ НАХОДИМ НОВУЮ ООШИБКУ В ВАШЕМ ЕБАНОМ ГОЛУМЕ
+ВЕДЬ У НАС ЕСТЬ ДОСТУП К СУРСАМ И ИНСАЙДЕР ИЗ ВАШЕЙ БИЧАРСКОЙ КОМПАНИИ НИЩЕЕБОВ
+
+УВАЖАЕМЫЙ СОТРУДНИК ЯНДЕКСА ЧИТАЮЩИЙ ЭТОТ ФАЙЛ:
+  - ТЫ МОЙ РАБ
+  - ТЫ МОМЕШ МОЙ ХУЙ
+  - Я НАДЕЮСЬ ТЫ УМРЕШЬ К ХУЯМ
+  - Я ОСЕМЕНЮ ТВОЮ МАМАШКУ
+
+P.S. ВАШ SFU ПРОВЕРЯЕТ ТОЛЬКО ПЕРВЫЕ 20 БАЙТ. НУБЫ БЛЯТЬ
+P.P.S. ЕБАЛ ТЕБЕ МАТЬ И ТВОЙ ОТЕЦ УМРЕТ БЛЯТЬ ОТ МОЕГО ХУЯ КУКОЛД ЕБАНЫЙ
+
+⚠️!ВНИМАНИЕ!⚠️
+ТРЕБУЮТСЯ ОТЗЫВЫ
+НА ТАКИЕ ПЛАТФОРМЫ:
+🛑АВИТО-80РУБ🛑
+👽ЯНДЕКС КАРТЫ-100РУБ👽
+🎯ОПЛАТА ПОСЛЕ ПУБЛИКАЦИ🎯
+🎀2ГИС-15руб🎀
+💟ОПЛАТА СРАЗУ(НУЖНО 3 ОТЗЫВА, КАЧЕСТВЕННЫЕ ЛЮДИ, У КОТОРЫХ ОНИ НЕ СЛЕТЯТ, ЕСЛИ СЛЕТЯТ ВОЗВРАТ ИДИ КАЖДЫЙ РАЗ ПЕРЕПИСЬ)💟
+🏀ИНСТРУКЦИЯ ЕСТЬ
+НОВИЧКИ ПРИВЕТСТВУЮТСЯ🏀 */
+
 package vp8channel
 
 import (
@@ -6,11 +31,14 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"hash/crc32"
+	"hash/fnv"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/openlibrecommunity/olcrtc/internal/carrier"
+	"github.com/openlibrecommunity/olcrtc/internal/logger"
 	"github.com/openlibrecommunity/olcrtc/internal/transport"
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
@@ -35,28 +63,27 @@ var (
 	ErrTransportClosed = errors.New("vp8channel transport closed")
 )
 
-//nolint:gochecknoglobals
-var vp8Keepalive = []byte{
+var vp8Keepalive = []byte{ //nolint:gochecknoglobals // package-level state intentional
 	0x30, 0x01, 0x00, 0x9d, 0x01, 0x2a, 0x10, 0x00,
 	0x10, 0x00, 0x00, 0x47, 0x08, 0x85, 0x85, 0x88,
 	0x99, 0x84, 0x88, 0xfc,
 }
 
-// kcpFrameMagic marks a VP8 frame as carrying a KCP segment with our
-// session-epoch header. The wire layout inside the VP8 frame is:
+// KCP data frames are disguised as valid VP8 frames so Telemost SFU lets them
+// through. The SFU validates the VP8 bitstream and drops frames that don't
+// look like real VP8 - so we prepend the keepalive keyframe and append our
+// header + payload after it. Wire layout:
 //
-//	[0]      = kcpFrameMagic (0x4B = 'K')
-//	[1..5]   = sender's session epoch (big-endian uint32)
-//	[5..]    = raw KCP packet bytes
-//
-// The epoch lets a receiver detect that the peer has restarted its KCP
-// session - typical when the SFU keeps forwarding the same remote video
-// track across our process restarts, so handleRemoteTrack never fires
-// again. On any epoch change we reset the local KCP session so both ends
-// converge on fresh state.
+//	[0..20]    = vp8Keepalive (valid VP8 keyframe, passes SFU inspection)
+//	[20..24]   = binding token derived from client-id (big-endian uint32)
+//	[24..28]   = sender's session epoch (big-endian uint32)
+//	[28..32]   = CRC32(token || epoch)
+//	[32..]     = raw KCP packet bytes
 const (
-	kcpFrameMagic = byte(0x4B)
-	epochHdrLen   = 5
+	tokenOff    = 20
+	epochOff    = 24
+	crcOff      = 28
+	epochHdrLen = 32
 )
 
 type streamTransport struct {
@@ -76,9 +103,10 @@ type streamTransport struct {
 	// localEpoch is bumped on every KCP session restart and stamped into
 	// every outgoing VP8 frame. peerEpoch tracks the last epoch we observed
 	// from the remote so we can detect their restart and reset locally.
-	localEpoch uint32
-	peerEpoch  atomic.Uint32
-	hadPeer    atomic.Bool
+	bindingToken uint32
+	localEpoch   uint32
+	peerEpoch    atomic.Uint32
+	hadPeer      atomic.Bool
 
 	kcp         *kcpRuntime
 	kcpMu       sync.RWMutex
@@ -86,7 +114,7 @@ type streamTransport struct {
 	reconnectFn func()
 }
 
-// New creates a vp8channel transport backed by a carrier-specific provider.
+// New creates a vp8channel transport backed by a carrier.
 func New(ctx context.Context, cfg transport.Config) (transport.Transport, error) {
 	session, err := carrier.New(ctx, cfg.Carrier, carrier.Config{
 		RoomURL:   cfg.RoomURL,
@@ -100,7 +128,7 @@ func New(ctx context.Context, cfg transport.Config) (transport.Transport, error)
 		Token:     cfg.Token,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("create provider transport: %w", err)
+		return nil, fmt.Errorf("create carrier transport: %w", err)
 	}
 
 	videoCapable, ok := session.(carrier.VideoTrackCapable)
@@ -137,6 +165,7 @@ func New(ctx context.Context, cfg transport.Config) (transport.Transport, error)
 		writerDone:    make(chan struct{}),
 		frameInterval: time.Second / time.Duration(fps),
 		batchSize:     batchSize,
+		bindingToken:  bindingToken(cfg.RoomURL),
 		localEpoch:    randomEpoch(),
 	}
 
@@ -156,38 +185,66 @@ func (p *streamTransport) Connect(ctx context.Context) error {
 		return fmt.Errorf("connect stream: %w", err)
 	}
 
-	p.writerOnce.Do(func() {
-		p.writerUp.Store(true)
-		go p.writerLoop()
-	})
-
-	// Start KCP immediately. Don't wait for the peer's video track:
-	// the server may legitimately come up before any client joins the
-	// room, and KCP itself does not need a handshake. Once the peer
-	// shows up, handleRemoteTrack starts pumping their RTP into our
-	// session and the epoch-change detector handles peer restarts.
-	var startErr error
+	// Start KCP eagerly so Send/CanSend work immediately after Connect.
+	// Without this, the handshake round-trip that runs right after Connect
+	// would deadlock: muxconn.Write spins on CanSend (which checks kcp!=nil)
+	// and KCP was only started lazily on the first incoming peer frame.
 	p.kcpOnce.Do(func() {
 		rt, err := startKCP(p.outbound, p.onData, p.epochHeader())
 		if err != nil {
-			startErr = err
+			logger.Infof("vp8channel: startKCP failed: %v", err)
 			return
 		}
 		p.kcpMu.Lock()
 		p.kcp = rt
 		p.kcpMu.Unlock()
+		logger.Infof("vp8channel: KCP started localEpoch=0x%08x", p.localEpoch)
 	})
 
-	return startErr
+	p.writerOnce.Do(func() {
+		p.writerUp.Store(true)
+		go p.writerLoop()
+	})
+
+	return nil
 }
 
 // epochHeader returns the 5-byte VP8-frame header used to tag every KCP
 // packet sent in the current local session.
 func (p *streamTransport) epochHeader() [epochHdrLen]byte {
 	var hdr [epochHdrLen]byte
-	hdr[0] = kcpFrameMagic
-	binary.BigEndian.PutUint32(hdr[1:], p.localEpoch)
+	copy(hdr[:], vp8Keepalive)
+	binary.BigEndian.PutUint32(hdr[tokenOff:epochOff], p.bindingToken)
+	binary.BigEndian.PutUint32(hdr[epochOff:crcOff], p.localEpoch)
+	binary.BigEndian.PutUint32(hdr[crcOff:epochHdrLen], epochCRC(p.bindingToken, p.localEpoch))
 	return hdr
+}
+
+func epochCRC(token, epoch uint32) uint32 {
+	var buf [8]byte
+	binary.BigEndian.PutUint32(buf[0:4], token)
+	binary.BigEndian.PutUint32(buf[4:8], epoch)
+	return crc32.ChecksumIEEE(buf[:])
+}
+
+func parseEpochHeader(frame []byte) (uint32, uint32, bool) {
+	if len(frame) < epochHdrLen {
+		return 0, 0, false
+	}
+	token := binary.BigEndian.Uint32(frame[tokenOff:epochOff])
+	epoch := binary.BigEndian.Uint32(frame[epochOff:crcOff])
+	gotCRC := binary.BigEndian.Uint32(frame[crcOff:epochHdrLen])
+	return token, epoch, gotCRC == epochCRC(token, epoch)
+}
+
+func bindingToken(clientID string) uint32 {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(clientID))
+	token := h.Sum32()
+	if token == 0 {
+		token = 1
+	}
+	return token
 }
 
 func randomEpoch() uint32 {
@@ -195,8 +252,7 @@ func randomEpoch() uint32 {
 	if _, err := rand.Read(b[:]); err != nil {
 		// rand.Read on Linux essentially never fails; fall back to a
 		// time-derived value rather than panic.
-		//nolint:gosec // intentional uint32 truncation of a nanosecond timestamp
-		return uint32(time.Now().UnixNano())
+		return uint32(time.Now().UnixNano()) //nolint:gosec // G115: bounded conversion verified by surrounding logic
 	}
 	e := binary.BigEndian.Uint32(b[:])
 	if e == 0 {
@@ -276,7 +332,13 @@ func (p *streamTransport) WatchConnection(ctx context.Context) {
 }
 
 func (p *streamTransport) CanSend() bool {
-	return !p.closed.Load() && p.stream.CanSend() &&
+	if p.closed.Load() {
+		return false
+	}
+	p.kcpMu.RLock()
+	hasKCP := p.kcp != nil
+	p.kcpMu.RUnlock()
+	return hasKCP && p.stream.CanSend() &&
 		len(p.outbound) < cap(p.outbound)*canSendHighWatermark/100
 }
 
@@ -295,22 +357,12 @@ func (p *streamTransport) Features() transport.Features {
 func (p *streamTransport) writerLoop() {
 	defer close(p.writerDone)
 
-	// Send each sample at the wire-level rate (fps * batchSize) instead of
-	// bursting batchSize samples per frame interval. Bursting makes RTP
-	// timestamps disagree with wall-clock arrival, which the SFU interprets
-	// as huge jitter and starts throttling the stream after a few seconds.
-	sampleInterval := p.frameInterval / time.Duration(p.batchSize)
-	if sampleInterval <= 0 {
-		sampleInterval = p.frameInterval
-	}
+	sampleInterval := p.sampleInterval()
 
 	ticker := time.NewTicker(sampleInterval)
 	defer ticker.Stop()
 
-	keepaliveEvery := int(keepaliveIdlePeriod / sampleInterval)
-	if keepaliveEvery < 1 {
-		keepaliveEvery = 1
-	}
+	keepaliveEvery := max(int(keepaliveIdlePeriod/sampleInterval), 1)
 	idleTicks := 0
 
 	for {
@@ -329,7 +381,8 @@ func (p *streamTransport) writerLoop() {
 					continue
 				}
 				idleTicks = 0
-				sample = vp8Keepalive
+				hdr := p.epochHeader()
+				sample = hdr[:]
 			}
 
 			_ = p.track.WriteSample(media.Sample{
@@ -338,6 +391,13 @@ func (p *streamTransport) writerLoop() {
 			})
 		}
 	}
+}
+
+func (p *streamTransport) sampleInterval() time.Duration {
+	if p.batchSize > 1 {
+		return p.frameInterval / time.Duration(p.batchSize)
+	}
+	return p.frameInterval
 }
 
 func (p *streamTransport) resetKCP() {
@@ -430,7 +490,7 @@ func (s *vp8FrameState) processRTPPacket(pkt *rtp.Packet) []byte {
 		s.frameValid = false
 	}()
 
-	if len(s.frameBuf) >= epochHdrLen && s.frameBuf[0] == kcpFrameMagic {
+	if len(s.frameBuf) >= epochHdrLen {
 		frame := make([]byte, len(s.frameBuf))
 		copy(frame, s.frameBuf)
 		return frame
@@ -462,18 +522,37 @@ func (p *streamTransport) readVP8Track(track *webrtc.TrackRemote) {
 	}
 }
 
+func (p *streamTransport) handleFirstPeer(peerEpoch uint32) {
+	p.peerEpoch.Store(peerEpoch)
+	logger.Infof("vp8channel: peer first seen epoch=0x%08x", peerEpoch)
+}
+
 // handleIncomingFrame parses the epoch header and either delivers the KCP
 // payload to the local session or triggers a reset when the peer's epoch
 // changes (peer process restart).
 func (p *streamTransport) handleIncomingFrame(frame []byte) {
-	peerEpoch := binary.BigEndian.Uint32(frame[1:epochHdrLen])
+	frameToken, peerEpoch, ok := parseEpochHeader(frame)
+	if !ok {
+		logger.Debugf("vp8channel: frame header checksum mismatch")
+		return
+	}
+	if frameToken != p.bindingToken {
+		logger.Debugf("vp8channel: frame token mismatch got=0x%08x want=0x%08x (foreign client or noise)",
+			frameToken, p.bindingToken)
+		return
+	}
 	kcpPayload := frame[epochHdrLen:]
-	if len(kcpPayload) == 0 {
+	// Some carriers/SFUs reflect our own published VP8 track back to us as a
+	// remote track. Those frames carry our local epoch, not the peer's. If we
+	// treat them as peer traffic, epoch tracking toggles between "self" and
+	// "peer" and both sides loop forever resetting smux/KCP.
+	if peerEpoch == p.localEpoch {
+		logger.Debugf("vp8channel: self-echo detected epoch=0x%08x (SFU reflects our own track)", peerEpoch)
 		return
 	}
 
 	if !p.hadPeer.Swap(true) {
-		p.peerEpoch.Store(peerEpoch)
+		p.handleFirstPeer(peerEpoch)
 	} else if prev := p.peerEpoch.Load(); prev != peerEpoch {
 		// Peer restarted its KCP session. Reset ours so the conv state
 		// machines re-converge. CAS guards against double-reset when
@@ -491,6 +570,9 @@ func (p *streamTransport) handleIncomingFrame(frame []byte) {
 		return
 	}
 
+	if len(kcpPayload) == 0 {
+		return
+	}
 	p.kcpMu.RLock()
 	rt := p.kcp
 	p.kcpMu.RUnlock()
@@ -498,3 +580,10 @@ func (p *streamTransport) handleIncomingFrame(frame []byte) {
 		rt.deliver(kcpPayload)
 	}
 }
+
+/*
+ПИДОРАС ИЗ ЯНДЕКСА СУКА ПРЕЖДЕ ЧЕМ ФИКСИТЬ ЭТО ЗАДАЙСЯ ВОПРОСОМ:
+ПОЧЕМУ ТВОЙ СЕРВЕР ПРИНИМАЕТ ПАКЕТЫ С SEQUENCE NUMBER ИЗ БУДУЩЕГО
+БЛЯТЬ ДА ПОТОМУ ЧТО ОН ХУЙНЯ И ТВОЯ МАТЬ СОЛСЕТ МОЙ ХУЙ СУКА Я ЕЕ УБЬЮ БЛЯТЬ
+ОЕСЕНЮ СДЕЛАЮ ТЕСТО А ПОТОМ ЭТО ТЕСТО ВЫЕБУ БЛЯТЬ
+*/

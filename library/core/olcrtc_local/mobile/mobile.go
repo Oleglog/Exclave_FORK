@@ -6,7 +6,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -31,40 +34,58 @@ type LogWriter interface {
 }
 
 var (
-	errAlreadyRunning     = errors.New("olcRTC already running")
-	errCarrierRequired    = errors.New("carrier is required")
-	errRoomIDRequired     = errors.New("roomID is required")
-	errKeyHexRequired     = errors.New("keyHex is required")
-	errNotRunning         = errors.New("olcRTC is not running")
-	errStoppedBeforeReady = errors.New("olcRTC stopped before becoming ready")
-	errStartTimedOut      = errors.New("olcRTC start timed out")
+	errAlreadyRunning       = errors.New("olcRTC already running")
+	errCarrierRequired      = errors.New("carrier is required")
+	errRoomIDRequired       = errors.New("roomID is required")
+	errClientIDRequired     = errors.New("clientID is required")
+	errKeyHexRequired       = errors.New("keyHex is required")
+	errNotRunning           = errors.New("olcRTC is not running")
+	errStoppedBeforeReady   = errors.New("olcRTC stopped before becoming ready")
+	errStartTimedOut        = errors.New("olcRTC start timed out")
+	errHTTPPingTimedOut     = errors.New("HTTP ping timed out")
+	errUnexpectedHTTPStatus = errors.New("unexpected HTTP status")
 )
 
 const (
-	defaultLink      = "direct"
-	defaultTransport = "vp8channel"
-	dataTransport    = "datachannel"
-	defaultDNSServer = "1.1.1.1:53"
-	carrierWBStream  = "wbstream"
+	defaultLink        = "direct"
+	defaultTransport   = "vp8channel"
+	dataTransport      = "datachannel"
+	defaultDNSServer   = "1.1.1.1:53"
+	defaultHTTPPingURL = "https://www.google.com/generate_204"
+	carrierWBStream    = "wbstream"
+	carrierJazz        = "jazz"
+	roomURLAny         = "any"
 )
 
-//nolint:gochecknoglobals // Mobile bindings expose a singleton runtime controlled by the embedding app.
+const (
+	httpPingWarmupTimeout = 1500 * time.Millisecond
+	httpPingSampleTimeout = 1500 * time.Millisecond
+	httpPingSamples       = 3
+	httpPingSampleDelay   = 80 * time.Millisecond
+)
+
 var (
-	mu          sync.Mutex
-	defaults    mobileConfig
-	defaultsSet sync.Once
-	cancel      context.CancelFunc
-	done        chan struct{}
-	ready       chan struct{}
-	errRun      error
+	mu                 sync.Mutex //nolint:gochecknoglobals // package-level state intentional
+	defaults           mobileConfig //nolint:gochecknoglobals // package-level state intentional
+	defaultsSet        sync.Once //nolint:gochecknoglobals // package-level state intentional
+	registerSet        sync.Once //nolint:gochecknoglobals // package-level state intentional
+	runClientWithReady = client.RunWithReady //nolint:gochecknoglobals // package-level state intentional
+	cancel             context.CancelFunc //nolint:gochecknoglobals // package-level state intentional
+	done               chan struct{} //nolint:gochecknoglobals // package-level state intentional
+	ready              chan struct{} //nolint:gochecknoglobals // package-level state intentional
+	errRun             error
 )
 
 type mobileConfig struct {
-	link         string
-	transport    string
-	dnsServer    string
-	vp8FPS       int
-	vp8BatchSize int
+	link            string
+	transport       string
+	dnsServer       string
+	vp8FPS          int
+	vp8BatchSize    int
+	seiFPS          int
+	seiBatchSize    int
+	seiFragmentSize int
+	seiAckTimeoutMS int
 }
 
 // SetProtector sets the Android VPN socket protector.
@@ -122,8 +143,37 @@ func SetVP8Options(fps, batchSize int) {
 	mu.Lock()
 	defer mu.Unlock()
 	ensureDefaultConfigLocked()
-	defaults.vp8FPS = clamp(fps, 1, 120)
-	defaults.vp8BatchSize = clamp(batchSize, 1, 32)
+	defaults.vp8FPS = clampAtLeastOne(fps, 120)
+	defaults.vp8BatchSize = clampAtLeastOne(batchSize, 64)
+}
+
+// SetSEIOptions configures seichannel parameters.
+// fps: encoded frame rate per second (1..120), 0 = keep current default.
+// batchSize: messages per tick (1..64), 0 = keep current default.
+// fragmentSize: max bytes per SEI fragment (>= 1), 0 = keep current default.
+// ackTimeoutMs: per-message ack timeout in milliseconds (>= 1), 0 = keep current default.
+//
+// Calling this is optional. When values are not set, mobileConfig defaults
+// (sweet-spot 30/8/900/1500) are passed to client.Config; the seichannel
+// transport additionally substitutes its own internal defaults if the
+// resulting Config still contains zeros, so downstream session.ValidateSEI
+// will not trip ErrSEI*Required.
+func SetSEIOptions(fps, batchSize, fragmentSize, ackTimeoutMs int) {
+	mu.Lock()
+	defer mu.Unlock()
+	ensureDefaultConfigLocked()
+	if fps > 0 {
+		defaults.seiFPS = clampAtLeastOne(fps, 120)
+	}
+	if batchSize > 0 {
+		defaults.seiBatchSize = clampAtLeastOne(batchSize, 64)
+	}
+	if fragmentSize > 0 {
+		defaults.seiFragmentSize = fragmentSize
+	}
+	if ackTimeoutMs > 0 {
+		defaults.seiAckTimeoutMS = ackTimeoutMs
+	}
 }
 
 // SetDebug enables or disables verbose logging.
@@ -138,23 +188,24 @@ func SetDebug(enabled bool) {
 }
 
 // Start launches the olcRTC client in background.
-// carrierName: carrier/provider name ("telemost", "jazz", "wbstream", "wbstream")
+// carrierName: carrier name ("telemost", "jazz", "wbstream")
 // roomID: carrier-specific room ID
+// clientID: client identifier that must match the server's -client-id
 // keyHex: 64-char hex encryption key
 // socksPort: local SOCKS5 proxy port (e.g. 10808)
 // socksUser/socksPass: SOCKS5 credentials (empty = no auth).
-func Start(carrierName, roomID, keyHex string, socksPort int, socksUser, socksPass string) error {
+func Start(carrierName, roomID, clientID, keyHex string, socksPort int, socksUser, socksPass string) error {
 	mu.Lock()
 	ensureDefaultConfigLocked()
 	cfg := defaults
 	mu.Unlock()
 
-	return startWithConfig(carrierName, cfg.transport, roomID, keyHex, socksPort, socksUser, socksPass, cfg)
+	return startWithConfig(carrierName, cfg.transport, roomID, clientID, keyHex, socksPort, socksUser, socksPass, cfg)
 }
 
 // StartWithTransport launches the client with an explicit transport for this start.
 func StartWithTransport(
-	carrierName, transportName, roomID, keyHex string,
+	carrierName, transportName, roomID, clientID, keyHex string,
 	socksPort int,
 	socksUser, socksPass string,
 ) error {
@@ -164,11 +215,333 @@ func StartWithTransport(
 	cfg.transport = transportName
 	mu.Unlock()
 
-	return startWithConfig(carrierName, transportName, roomID, keyHex, socksPort, socksUser, socksPass, cfg)
+	return startWithConfig(carrierName, transportName, roomID, clientID, keyHex, socksPort, socksUser, socksPass, cfg)
+}
+
+// Check starts an isolated short-lived client and returns elapsed milliseconds once ready.
+// It does not use the singleton Start/Stop runtime, so callers may run checks in parallel.
+func Check(
+	carrierName, transportName, roomID, clientID, keyHex string,
+	socksPort int,
+	timeoutMillis int,
+	vp8FPS int,
+	vp8BatchSize int,
+) (int64, error) {
+	registerDefaults()
+	carrierName = normalizeCarrier(carrierName)
+	transportName = normalizeTransport(transportName)
+	if err := validateStartArgs(carrierName, roomID, clientID, keyHex); err != nil {
+		return 0, err
+	}
+
+	if timeoutMillis <= 0 {
+		timeoutMillis = 8000
+	}
+
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	defer cancelFunc()
+
+	readyCh := make(chan struct{})
+	doneCh := make(chan error, 1)
+	var readyOnce sync.Once
+	startedAt := time.Now()
+
+	go func() {
+		doneCh <- runClientWithReady(
+			ctx,
+			client.Config{
+				Link:         defaultLink,
+				Transport:    transportName,
+				Carrier:      carrierName,
+				RoomURL:      buildRoomURL(carrierName, roomID),
+				KeyHex:       keyHex,
+				DeviceID:     clientID,
+				LocalAddr:    fmt.Sprintf("127.0.0.1:%d", socksPort),
+				DNSServer:    defaultDNSServer,
+				VP8FPS:       clampAtLeastOne(vp8FPS, 120),
+				VP8BatchSize: clampAtLeastOne(vp8BatchSize, 64),
+			},
+			func() {
+				readyOnce.Do(func() {
+					close(readyCh)
+				})
+			},
+		)
+	}()
+
+	timer := time.NewTimer(time.Duration(timeoutMillis) * time.Millisecond)
+	defer timer.Stop()
+
+	select {
+	case <-readyCh:
+		elapsed := time.Since(startedAt).Milliseconds()
+		cancelFunc()
+		waitForCheckDone(doneCh)
+		return elapsed, nil
+	case err := <-doneCh:
+		if err != nil {
+			return 0, err
+		}
+		return 0, errStoppedBeforeReady
+	case <-timer.C:
+		cancelFunc()
+		waitForCheckDone(doneCh)
+		return 0, errStartTimedOut
+	}
+}
+
+// Ping starts an isolated short-lived client, waits until its SOCKS listener is ready,
+// performs HTTP requests through that SOCKS tunnel, and returns HTTP latency in milliseconds.
+//
+// The returned value does not include RTC startup time. It measures only HTTP request latency
+// after the tunnel is ready.
+func Ping(
+	carrierName, transportName, roomID, clientID, keyHex string,
+	socksPort int,
+	timeoutMillis int,
+	pingURL string,
+	vp8FPS int,
+	vp8BatchSize int,
+) (int64, error) {
+	registerDefaults()
+	carrierName = normalizeCarrier(carrierName)
+	transportName = normalizeTransport(transportName)
+
+	if err := validateStartArgs(carrierName, roomID, clientID, keyHex); err != nil {
+		return 0, err
+	}
+
+	if timeoutMillis <= 0 {
+		timeoutMillis = 10000
+	}
+	if pingURL == "" {
+		pingURL = defaultHTTPPingURL
+	}
+
+	ctx, cancelFunc := context.WithTimeout(
+		context.Background(),
+		time.Duration(timeoutMillis)*time.Millisecond,
+	)
+	defer cancelFunc()
+
+	readyCh := make(chan struct{})
+	doneCh := make(chan error, 1)
+
+	var readyOnce sync.Once
+
+	go func() {
+		doneCh <- runClientWithReady(
+			ctx,
+			client.Config{
+				Link:         defaultLink,
+				Transport:    transportName,
+				Carrier:      carrierName,
+				RoomURL:      buildRoomURL(carrierName, roomID),
+				KeyHex:       keyHex,
+				DeviceID:     clientID,
+				LocalAddr:    fmt.Sprintf("127.0.0.1:%d", socksPort),
+				DNSServer:    defaultDNSServer,
+				VP8FPS:       clampAtLeastOne(vp8FPS, 120),
+				VP8BatchSize: clampAtLeastOne(vp8BatchSize, 64),
+			},
+			func() {
+				readyOnce.Do(func() {
+					close(readyCh)
+				})
+			},
+		)
+	}()
+
+	select {
+	case <-readyCh:
+		elapsed, err := httpPingThroughSocks(
+			ctx,
+			fmt.Sprintf("127.0.0.1:%d", socksPort),
+			pingURL,
+		)
+
+		cancelFunc()
+		waitForCheckDone(doneCh)
+
+		if err != nil {
+			return 0, err
+		}
+
+		return elapsed, nil
+
+	case err := <-doneCh:
+		if err != nil {
+			return 0, err
+		}
+
+		return 0, errStoppedBeforeReady
+
+	case <-ctx.Done():
+		cancelFunc()
+		waitForCheckDone(doneCh)
+
+		return 0, errStartTimedOut
+	}
+}
+
+func httpPingThroughSocks(
+	parentCtx context.Context,
+	socksAddr string,
+	targetURL string,
+) (int64, error) {
+	normalizedURL, err := normalizeHTTPPingURL(targetURL)
+	if err != nil {
+		return 0, err
+	}
+
+	client, closeClient := newHTTPPingClient(socksAddr)
+	defer closeClient()
+
+	// Warm up the SOCKS/TCP/TLS path. This request is intentionally not included
+	// in the returned latency.
+	_, _ = singleHTTPPingRequest(
+		parentCtx,
+		client,
+		normalizedURL,
+		httpPingWarmupTimeout,
+	)
+
+	return bestHTTPPingSample(parentCtx, client, normalizedURL)
+}
+
+func normalizeHTTPPingURL(targetURL string) (string, error) {
+	if targetURL == "" {
+		targetURL = defaultHTTPPingURL
+	}
+
+	if _, err := url.ParseRequestURI(targetURL); err != nil {
+		return "", fmt.Errorf("parse HTTP ping URL: %w", err)
+	}
+
+	return targetURL, nil
+}
+
+func newHTTPPingClient(socksAddr string) (*http.Client, func()) {
+	proxyURL := &url.URL{
+		Scheme: "socks5",
+		Host:   socksAddr,
+	}
+
+	transport := &http.Transport{
+		Proxy: http.ProxyURL(proxyURL),
+
+		DisableKeepAlives:   false,
+		MaxIdleConns:        4,
+		MaxIdleConnsPerHost: 4,
+		IdleConnTimeout:     10 * time.Second,
+
+		ForceAttemptHTTP2:     false,
+		TLSHandshakeTimeout:   httpPingSampleTimeout,
+		ResponseHeaderTimeout: httpPingSampleTimeout,
+		ExpectContinueTimeout: 500 * time.Millisecond,
+	}
+
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   httpPingSampleTimeout,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	return client, transport.CloseIdleConnections
+}
+
+func bestHTTPPingSample(
+	parentCtx context.Context,
+	client *http.Client,
+	targetURL string,
+) (int64, error) {
+	var best int64
+	var lastErr error
+
+	for i := range httpPingSamples {
+		elapsed, err := singleHTTPPingRequest(
+			parentCtx,
+			client,
+			targetURL,
+			httpPingSampleTimeout,
+		)
+		if err != nil {
+			lastErr = err
+		} else {
+			best = bestPositiveLatency(best, elapsed)
+		}
+
+		if i < httpPingSamples-1 {
+			time.Sleep(httpPingSampleDelay)
+		}
+	}
+
+	if best > 0 {
+		return best, nil
+	}
+
+	if lastErr != nil {
+		return 0, lastErr
+	}
+
+	return 0, errHTTPPingTimedOut
+}
+
+func bestPositiveLatency(currentBest, next int64) int64 {
+	if next <= 0 {
+		return currentBest
+	}
+
+	if currentBest == 0 || next < currentBest {
+		return next
+	}
+
+	return currentBest
+}
+
+func singleHTTPPingRequest(
+	parentCtx context.Context,
+	client *http.Client,
+	targetURL string,
+	timeout time.Duration,
+) (int64, error) {
+	ctx, cancel := context.WithTimeout(parentCtx, timeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
+	if err != nil {
+		return 0, fmt.Errorf("create HTTP ping request: %w", err)
+	}
+
+	req.Header.Set("User-Agent", "Olcbox-Android")
+	req.Header.Set("Connection", "keep-alive")
+	req.Header.Set("Cache-Control", "no-cache")
+
+	startedAt := time.Now()
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("perform HTTP ping request: %w", err)
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	elapsed := time.Since(startedAt).Milliseconds()
+
+	_, _ = io.Copy(io.Discard, resp.Body)
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode > http.StatusPermanentRedirect {
+		return 0, fmt.Errorf("%w: %d", errUnexpectedHTTPStatus, resp.StatusCode)
+	}
+
+	return elapsed, nil
 }
 
 func startWithConfig(
-	carrierName, transportName, roomID, keyHex string,
+	carrierName, transportName, roomID, clientID, keyHex string,
 	socksPort int,
 	socksUser, socksPass string,
 	cfg mobileConfig,
@@ -182,15 +555,11 @@ func startWithConfig(
 		cfg.transport = normalizeTransport(transportName)
 	}
 
-	switch {
-	case cancel != nil:
+	if cancel != nil {
 		return errAlreadyRunning
-	case carrierName == "":
-		return errCarrierRequired
-	case roomID == "" && carrierName != "jazz":
-		return errRoomIDRequired
-	case keyHex == "":
-		return errKeyHexRequired
+	}
+	if err := validateStartArgs(carrierName, roomID, clientID, keyHex); err != nil {
+		return err
 	}
 
 	roomURL := buildRoomURL(carrierName, roomID)
@@ -206,20 +575,25 @@ func startWithConfig(
 	go func() {
 		defer cancelFunc()
 
-		err := client.RunWithReady(
+		err := runClientWithReady(
 			ctx,
 			client.Config{
-				Link:         cfg.link,
-				Transport:    cfg.transport,
-				Carrier:      carrierName,
-				RoomURL:      roomURL,
-				KeyHex:       keyHex,
-				LocalAddr:    fmt.Sprintf("127.0.0.1:%d", socksPort),
-				DNSServer:    cfg.dnsServer,
-				SOCKSUser:    socksUser,
-				SOCKSPass:    socksPass,
-				VP8FPS:       cfg.vp8FPS,
-				VP8BatchSize: cfg.vp8BatchSize,
+				Link:            cfg.link,
+				Transport:       cfg.transport,
+				Carrier:         carrierName,
+				RoomURL:         roomURL,
+				KeyHex:          keyHex,
+				DeviceID:        clientID,
+				LocalAddr:       fmt.Sprintf("127.0.0.1:%d", socksPort),
+				DNSServer:       cfg.dnsServer,
+				SOCKSUser:       socksUser,
+				SOCKSPass:       socksPass,
+				VP8FPS:          cfg.vp8FPS,
+				VP8BatchSize:    cfg.vp8BatchSize,
+				SEIFPS:          cfg.seiFPS,
+				SEIBatchSize:    cfg.seiBatchSize,
+				SEIFragmentSize: cfg.seiFragmentSize,
+				SEIAckTimeoutMS: cfg.seiAckTimeoutMS,
 			},
 			func() {
 				readyOnce.Do(func() {
@@ -239,8 +613,7 @@ func startWithConfig(
 }
 
 // WaitReady blocks until the selected transport is connected and the local SOCKS5 listener is ready.
-//
-//nolint:cyclop // The control flow is intentionally linear so mobile callers can observe each startup state clearly.
+//nolint:cyclop // straightforward state-machine waits with multiple terminal conditions
 func WaitReady(timeoutMillis int) error {
 	mu.Lock()
 	r := ready
@@ -317,17 +690,28 @@ func IsRunning() bool {
 }
 
 func registerDefaults() {
-	session.RegisterDefaults()
+	registerSet.Do(session.RegisterDefaults)
+}
+
+func waitForCheckDone(doneCh <-chan error) {
+	select {
+	case <-doneCh:
+	case <-time.After(2 * time.Second):
+	}
 }
 
 func ensureDefaultConfigLocked() {
 	defaultsSet.Do(func() {
 		defaults = mobileConfig{
-			link:         defaultLink,
-			transport:    defaultTransport,
-			dnsServer:    defaultDNSServer,
-			vp8FPS:       60,
-			vp8BatchSize: 8,
+			link:            defaultLink,
+			transport:       defaultTransport,
+			dnsServer:       defaultDNSServer,
+			vp8FPS:          60,
+			vp8BatchSize:    8,
+			seiFPS:          30,
+			seiBatchSize:    8,
+			seiFragmentSize: 900,
+			seiAckTimeoutMS: 1500,
 		}
 	})
 }
@@ -350,13 +734,28 @@ func normalizeCarrier(carrierName string) string {
 	return carrierName
 }
 
+func validateStartArgs(carrierName, roomID, clientID, keyHex string) error {
+	switch {
+	case carrierName == "":
+		return errCarrierRequired
+	case roomID == "" && carrierName != carrierJazz:
+		return errRoomIDRequired
+	case clientID == "":
+		return errClientIDRequired
+	case keyHex == "":
+		return errKeyHexRequired
+	default:
+		return nil
+	}
+}
+
 func buildRoomURL(carrierName, roomID string) string {
 	switch carrierName {
 	case "telemost":
 		return "https://telemost.yandex.ru/j/" + roomID
-	case "jazz":
+	case carrierJazz:
 		if roomID == "" {
-			return "any"
+			return roomURLAny
 		}
 		return roomID
 	case carrierWBStream:
@@ -366,9 +765,9 @@ func buildRoomURL(carrierName, roomID string) string {
 	}
 }
 
-func clamp(value, minValue, maxValue int) int {
-	if value < minValue {
-		return minValue
+func clampAtLeastOne(value, maxValue int) int {
+	if value < 1 {
+		return 1
 	}
 	if value > maxValue {
 		return maxValue

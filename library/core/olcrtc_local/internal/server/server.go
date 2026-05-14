@@ -13,15 +13,17 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/openlibrecommunity/olcrtc/internal/crypto"
+	"github.com/openlibrecommunity/olcrtc/internal/handshake"
 	"github.com/openlibrecommunity/olcrtc/internal/link"
 	"github.com/openlibrecommunity/olcrtc/internal/logger"
 	"github.com/openlibrecommunity/olcrtc/internal/muxconn"
 	"github.com/openlibrecommunity/olcrtc/internal/names"
-	"github.com/openlibrecommunity/olcrtc/internal/protect"
 	"github.com/xtaci/smux"
-	"golang.org/x/net/proxy"
 )
+
+const connectCommand = "connect"
 
 var (
 	// ErrKeyRequired is returned when no encryption key is provided.
@@ -34,6 +36,19 @@ var (
 	ErrSocks5ConnectFailed = errors.New("SOCKS5 connect failed")
 )
 
+// SessionOpenFunc is called after a successful handshake, before the server
+// accepts tunnel streams on that session.
+type SessionOpenFunc func(sessionID, deviceID string, claims map[string]any)
+
+// SessionCloseFunc is called when a session is torn down. Possible reasons:
+// "reconnect" (carrier dropped and was reestablished), "closed" (graceful
+// shutdown or ctx cancel).
+type SessionCloseFunc func(sessionID, reason string)
+
+// TrafficFunc is called once per tunnel stream, after the copy loops finish.
+// bytesIn counts client→target bytes; bytesOut counts target→client bytes.
+type TrafficFunc func(sessionID, addr string, bytesIn, bytesOut uint64)
+
 // Server handles incoming tunnel connections and proxies their traffic.
 type Server struct {
 	ln             link.Link
@@ -43,14 +58,16 @@ type Server struct {
 	sessMu         sync.RWMutex
 	reinstallMu    sync.Mutex
 	wg             sync.WaitGroup
+	authHook       handshake.AuthFunc
+	onOpen         SessionOpenFunc
+	onClose        SessionCloseFunc
+	onTraffic      TrafficFunc
+	deviceID       string
+	sessionID      string
 	dnsServer      string
 	resolver       *net.Resolver
 	socksProxyAddr string
 	socksProxyPort int
-	socksProxyUser string
-	socksProxyPass string
-	warpProxyAddr  string
-	warpProxyPort  int
 }
 
 // ConnectRequest is a message from the client to establish a new connection.
@@ -60,77 +77,88 @@ type ConnectRequest struct {
 	Port int    `json:"port"`
 }
 
-// Run starts the server with the specified parameters.
-func Run(
-	ctx context.Context,
-	linkName,
-	transportName,
-	carrierName,
-	roomURL,
-	keyHex string,
-	dnsServer,
-	socksProxyAddr string,
-	socksProxyPort int,
-	socksProxyUser, socksProxyPass string,
-	warpProxyAddr string,
-	warpProxyPort int,
-	videoWidth int,
-	videoHeight int,
-	videoFPS int,
-	videoBitrate string,
-	videoHW string,
-	videoQRSize int,
-	videoQRRecovery string,
-	videoCodec string,
-	videoTileModule int,
-	videoTileRS int,
-	vp8FPS int,
-	vp8BatchSize int,
-	seiFPS int,
-	seiBatchSize int,
-	seiFragmentSize int,
-	seiAckTimeoutMS int,
-) error {
+// Config holds runtime configuration for [Run].
+type Config struct {
+	Link            string
+	Transport       string
+	Carrier         string
+	RoomURL         string
+	KeyHex          string
+	DNSServer       string
+	SOCKSProxyAddr  string
+	SOCKSProxyPort  int
+	VideoWidth      int
+	VideoHeight     int
+	VideoFPS        int
+	VideoBitrate    string
+	VideoHW         string
+	VideoQRSize     int
+	VideoQRRecovery string
+	VideoCodec      string
+	VideoTileModule int
+	VideoTileRS     int
+	VP8FPS          int
+	VP8BatchSize    int
+	SEIFPS          int
+	SEIBatchSize    int
+	SEIFragmentSize int
+	SEIAckTimeoutMS int
+	Engine          string
+	URL             string
+	Token           string
+
+	// AuthHook is invoked after CLIENT_HELLO to authorize the client and
+	// return a session ID. If nil, every client is admitted with a random UUID.
+	AuthHook handshake.AuthFunc
+
+	// OnSessionOpen fires after a successful handshake. Nil means no-op.
+	OnSessionOpen SessionOpenFunc
+	// OnSessionClose fires when the session is torn down (reconnect, closed). Nil means no-op.
+	OnSessionClose SessionCloseFunc
+	// OnTraffic fires once per tunnel stream after both copy loops finish. Nil means no-op.
+	OnTraffic TrafficFunc
+}
+
+// Run starts the server with the given configuration.
+func Run(ctx context.Context, cfg Config) error {
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	cipher, err := setupCipher(keyHex)
+	cipher, err := setupCipher(cfg.KeyHex)
 	if err != nil {
 		return fmt.Errorf("setupCipher failed: %w", err)
 	}
 
-	// Install the SOCKS5 config globally so all HTTP clients used by
-	// providers (jazz/wb_stream/telemost API calls) and outbound dials
-	// route through the same proxy.
-	if socksProxyAddr != "" {
-		protect.SetSocks5(protect.Socks5Config{
-			Addr: net.JoinHostPort(socksProxyAddr, strconv.Itoa(socksProxyPort)),
-			User: socksProxyUser,
-			Pass: socksProxyPass,
-		})
-	} else {
-		protect.SetSocks5(protect.Socks5Config{})
+	hook := cfg.AuthHook
+	if hook == nil {
+		hook = defaultAuthHook
+	}
+	onOpen := cfg.OnSessionOpen
+	if onOpen == nil {
+		onOpen = func(string, string, map[string]any) {}
+	}
+	onClose := cfg.OnSessionClose
+	if onClose == nil {
+		onClose = func(string, string) {}
+	}
+	onTraffic := cfg.OnTraffic
+	if onTraffic == nil {
+		onTraffic = func(string, string, uint64, uint64) {}
 	}
 
 	s := &Server{
 		cipher:         cipher,
-		dnsServer:      dnsServer,
-		socksProxyAddr: socksProxyAddr,
-		socksProxyPort: socksProxyPort,
-		socksProxyUser: socksProxyUser,
-		socksProxyPass: socksProxyPass,
-		warpProxyAddr:  warpProxyAddr,
-		warpProxyPort:  warpProxyPort,
+		authHook:       hook,
+		onOpen:         onOpen,
+		onClose:        onClose,
+		onTraffic:      onTraffic,
+		dnsServer:      cfg.DNSServer,
+		socksProxyAddr: cfg.SOCKSProxyAddr,
+		socksProxyPort: cfg.SOCKSProxyPort,
 	}
 	s.setupResolver()
 
-	if err := s.bringUpLink(
-		runCtx, linkName, transportName, carrierName, roomURL, cancel,
-		videoWidth, videoHeight, videoFPS, videoBitrate, videoHW,
-		videoQRSize, videoQRRecovery, videoCodec, videoTileModule, videoTileRS,
-		vp8FPS, vp8BatchSize,
-		seiFPS, seiBatchSize, seiFragmentSize, seiAckTimeoutMS,
-	); err != nil {
+	if err := s.bringUpLink(runCtx, cfg, cancel); err != nil {
 		return err
 	}
 
@@ -182,52 +210,49 @@ func (s *Server) setupResolver() {
 func smuxConfig() *smux.Config {
 	cfg := smux.DefaultConfig()
 	cfg.Version = 2
+	cfg.KeepAliveDisabled = true
 	cfg.MaxFrameSize = 32768
 	cfg.MaxReceiveBuffer = 16 * 1024 * 1024
 	cfg.MaxStreamBuffer = 1024 * 1024
 	cfg.KeepAliveInterval = 10 * time.Second
-	cfg.KeepAliveTimeout = 120 * time.Second
+	cfg.KeepAliveTimeout = 60 * time.Second
 	return cfg
 }
 
 func (s *Server) bringUpLink(
 	ctx context.Context,
-	linkName, transportName, carrierName, roomURL string,
+	cfg Config,
 	cancel context.CancelFunc,
-	videoWidth, videoHeight, videoFPS int,
-	videoBitrate, videoHW string,
-	videoQRSize int,
-	videoQRRecovery string,
-	videoCodec string,
-	videoTileModule, videoTileRS int,
-	vp8FPS, vp8BatchSize int,
-	seiFPS, seiBatchSize, seiFragmentSize, seiAckTimeoutMS int,
 ) error {
-	ln, err := link.New(ctx, linkName, link.Config{
-		Transport:       transportName,
-		Carrier:         carrierName,
-		RoomURL:         roomURL,
+	ln, err := link.New(ctx, cfg.Link, link.Config{
+		Transport:       cfg.Transport,
+		Carrier:         cfg.Carrier,
+		RoomURL:         cfg.RoomURL,
+		Engine:          cfg.Engine,
+		URL:             cfg.URL,
+		Token:           cfg.Token,
+		DeviceID:        "",
 		Name:            names.Generate(),
 		OnData:          s.onData,
 		DNSServer:       s.dnsServer,
 		ProxyAddr:       s.socksProxyAddr,
 		ProxyPort:       s.socksProxyPort,
-		VideoWidth:      videoWidth,
-		VideoHeight:     videoHeight,
-		VideoFPS:        videoFPS,
-		VideoBitrate:    videoBitrate,
-		VideoHW:         videoHW,
-		VideoQRSize:     videoQRSize,
-		VideoQRRecovery: videoQRRecovery,
-		VideoCodec:      videoCodec,
-		VideoTileModule: videoTileModule,
-		VideoTileRS:     videoTileRS,
-		VP8FPS:          vp8FPS,
-		VP8BatchSize:    vp8BatchSize,
-		SEIFPS:          seiFPS,
-		SEIBatchSize:    seiBatchSize,
-		SEIFragmentSize: seiFragmentSize,
-		SEIAckTimeoutMS: seiAckTimeoutMS,
+		VideoWidth:      cfg.VideoWidth,
+		VideoHeight:     cfg.VideoHeight,
+		VideoFPS:        cfg.VideoFPS,
+		VideoBitrate:    cfg.VideoBitrate,
+		VideoHW:         cfg.VideoHW,
+		VideoQRSize:     cfg.VideoQRSize,
+		VideoQRRecovery: cfg.VideoQRRecovery,
+		VideoCodec:      cfg.VideoCodec,
+		VideoTileModule: cfg.VideoTileModule,
+		VideoTileRS:     cfg.VideoTileRS,
+		VP8FPS:          cfg.VP8FPS,
+		VP8BatchSize:    cfg.VP8BatchSize,
+		SEIFPS:          cfg.SEIFPS,
+		SEIBatchSize:    cfg.SEIBatchSize,
+		SEIFragmentSize: cfg.SEIFragmentSize,
+		SEIAckTimeoutMS: cfg.SEIAckTimeoutMS,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create link: %w", err)
@@ -238,9 +263,15 @@ func (s *Server) bringUpLink(
 		logger.Infof("Server link reported conference end: %s", reason)
 		cancel()
 	})
-	ln.SetReconnectCallback(func() { s.handleReconnect() })
+	ln.SetShouldReconnect(func() bool { return ctx.Err() == nil })
+	ln.SetReconnectCallback(func() {
+		if ctx.Err() != nil {
+			return
+		}
+		s.handleReconnect()
+	})
 
-	logger.Infof("Connecting link via %s/%s/%s...", linkName, transportName, carrierName)
+	logger.Infof("Connecting link via %s/%s/%s...", cfg.Link, cfg.Transport, cfg.Carrier)
 	if err := ln.Connect(ctx); err != nil {
 		return fmt.Errorf("failed to connect link: %w", err)
 	}
@@ -281,34 +312,63 @@ func (s *Server) reinstallSession(dead *smux.Session) {
 	s.reinstallMu.Lock()
 	defer s.reinstallMu.Unlock()
 
-	s.sessMu.Lock()
-	if s.session != dead {
-		s.sessMu.Unlock()
+	// Pre-build the replacement so we can swap atomically below.
+	newConn := muxconn.New(s.ln, s.cipher)
+	newSess, err := smux.Server(newConn, smuxConfig())
+	if err != nil {
+		logger.Warnf("smux server init failed: %v", err)
+		_ = newConn.Close()
 		return
 	}
-	if s.session != nil {
-		_ = s.session.Close()
-		s.session = nil
+
+	s.sessMu.Lock()
+	if s.session != dead {
+		// Someone else already reinstalled — discard our build.
+		s.sessMu.Unlock()
+		_ = newSess.Close()
+		_ = newConn.Close()
+		return
 	}
-	if s.conn != nil {
-		_ = s.conn.Close()
-		s.conn = nil
-	}
+	oldSess := s.session
+	oldConn := s.conn
+	oldSID := s.sessionID
+	s.session = newSess
+	s.conn = newConn
+	s.sessionID = ""
+	s.deviceID = ""
 	s.sessMu.Unlock()
-	s.installSession()
+
+	if oldSess != nil {
+		_ = oldSess.Close()
+	}
+	if oldConn != nil {
+		_ = oldConn.Close()
+	}
+	if oldSID != "" {
+		s.onClose(oldSID, "reconnect")
+	}
 }
 
 func (s *Server) closeSession() {
 	s.sessMu.Lock()
-	if s.session != nil {
-		_ = s.session.Close()
-		s.session = nil
-	}
-	if s.conn != nil {
-		_ = s.conn.Close()
-		s.conn = nil
-	}
+	sess := s.session
+	conn := s.conn
+	s.session = nil
+	s.conn = nil
+	oldSID := s.sessionID
+	s.sessionID = ""
+	s.deviceID = ""
 	s.sessMu.Unlock()
+
+	if conn != nil {
+		_ = conn.Close()
+	}
+	if sess != nil {
+		_ = sess.Close()
+	}
+	if oldSID != "" {
+		s.onClose(oldSID, "closed")
+	}
 }
 
 func (s *Server) onData(data []byte) {
@@ -320,15 +380,13 @@ func (s *Server) onData(data []byte) {
 	}
 }
 
-// serve drives the smux Accept loop, spawning a tunnel per inbound stream.
-// The loop tolerates session bounces (reconnects) by waiting until a fresh
-// session is installed instead of terminating the server.
+// serve drives the smux Accept loop. The first accepted stream on a given
+// smux session is the control stream — the handshake runs there. Subsequent
+// streams are tunnel streams and proxy traffic.
 func (s *Server) serve(ctx context.Context) {
 	for {
-		select {
-		case <-ctx.Done():
+		if contextDone(ctx) {
 			return
-		default:
 		}
 
 		s.sessMu.RLock()
@@ -343,14 +401,18 @@ func (s *Server) serve(ctx context.Context) {
 			}
 		}
 
+		if !s.handshakeReady() {
+			if !s.acceptHandshake(ctx, sess) {
+				continue
+			}
+		}
+
 		stream, err := sess.AcceptStream()
 		if err != nil {
-			select {
-			case <-ctx.Done():
+			if contextDone(ctx) {
 				return
-			default:
 			}
-			logger.Infof("AcceptStream returned %v - reinstalling session", err)
+			logger.Debugf("AcceptStream returned %v - reinstalling session", err)
 			s.reinstallSession(sess)
 			continue
 		}
@@ -360,6 +422,72 @@ func (s *Server) serve(ctx context.Context) {
 			defer s.wg.Done()
 			s.handleStream(ctx, stream)
 		}()
+	}
+}
+
+func contextDone(ctx context.Context) bool {
+	select {
+	case <-ctx.Done():
+		return true
+	default:
+		return false
+	}
+}
+
+// handshakeReady reports whether the current session has completed its
+// handshake. The session is reset on reconnect, so this is recomputed.
+func (s *Server) handshakeReady() bool {
+	s.sessMu.RLock()
+	defer s.sessMu.RUnlock()
+	return s.sessionID != ""
+}
+
+func (s *Server) acceptHandshake(ctx context.Context, sess *smux.Session) bool {
+	stream, err := sess.AcceptStream()
+	if err != nil {
+		select {
+		case <-ctx.Done():
+			return false
+		default:
+		}
+		logger.Debugf("AcceptStream(control) returned %v - reinstalling session", err)
+		s.reinstallSession(sess)
+		return false
+	}
+	_ = stream.SetDeadline(time.Now().Add(handshake.DefaultTimeout))
+	hello, sid, err := handshake.Server(stream, s.authHook)
+	_ = stream.SetDeadline(time.Time{})
+	if err != nil {
+		logger.Warnf("handshake failed: %v", err)
+		_ = stream.Close()
+		s.reinstallSession(sess)
+		return false
+	}
+	s.sessMu.Lock()
+	s.deviceID = hello.DeviceID
+	s.sessionID = sid
+	s.sessMu.Unlock()
+	s.onOpen(sid, hello.DeviceID, hello.Claims)
+	logger.Infof("session %s opened (device=%s)", sid, hello.DeviceID)
+	// The control stream stays open for the lifetime of the session;
+	// keep it parked in a goroutine so the smux session does not close it.
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.parkControlStream(stream)
+	}()
+	return true
+}
+
+// parkControlStream blocks reading from the control stream until it closes.
+// Future control messages (kick, rate updates, etc.) would be dispatched here.
+func (s *Server) parkControlStream(stream *smux.Stream) {
+	defer func() { _ = stream.Close() }()
+	buf := make([]byte, 64)
+	for {
+		if _, err := stream.Read(buf); err != nil {
+			return
+		}
 	}
 }
 
@@ -404,15 +532,25 @@ func parseConnectRequest(buf []byte) (ConnectRequest, bool) {
 	if err := json.Unmarshal(buf, &req); err != nil {
 		return req, false
 	}
-	if req.Cmd != "connect" {
+	if req.Cmd != connectCommand {
 		return req, false
 	}
 	return req, true
 }
 
+// defaultAuthHook admits every client and assigns a random session ID.
+// Replace it via [Config.AuthHook] to plug in real authorization.
+func defaultAuthHook(_ string, _ map[string]any) (string, error) {
+	return uuid.NewString(), nil
+}
+
 func (s *Server) dispatch(stream *smux.Stream, req ConnectRequest) {
 	addr := net.JoinHostPort(req.Addr, strconv.Itoa(req.Port))
 	logger.Infof("sid=%d connect %s", stream.ID(), addr)
+
+	s.sessMu.RLock()
+	sid := s.sessionID
+	s.sessMu.RUnlock()
 
 	dialStart := time.Now()
 	conn, err := s.dial(req)
@@ -430,47 +568,56 @@ func (s *Server) dispatch(stream *smux.Stream, req ConnectRequest) {
 		return
 	}
 
+	var bytesOut uint64
+	done := make(chan struct{})
 	go func() {
-		_, _ = io.Copy(stream, conn)
+		n, _ := io.Copy(stream, conn)
+		if n > 0 {
+			bytesOut = uint64(n)
+		}
 		_ = stream.Close()
+		close(done)
 	}()
-	_, _ = io.Copy(conn, stream)
+	in, _ := io.Copy(conn, stream)
+	_ = conn.Close()
+	<-done
+	bytesIn := uint64(0)
+	if in > 0 {
+		bytesIn = uint64(in)
+	}
+	if s.onTraffic != nil {
+		s.onTraffic(sid, addr, bytesIn, bytesOut)
+	}
 }
 
-// dial opens a TCP connection to req.Addr:req.Port for client tunnel
-// traffic. If a WARP proxy is configured, all client traffic is routed
-// through it so the remote endpoint sees a Cloudflare WARP IP instead of
-// the VPS IP. The carrier SOCKS5 proxy (used for signalling) is never
-// used here.
 func (s *Server) dial(req ConnectRequest) (net.Conn, error) {
 	addr := net.JoinHostPort(req.Addr, strconv.Itoa(req.Port))
-
-	// If WARP proxy is configured, route client traffic through it.
-	if s.warpProxyAddr != "" {
-		proxyAddr := net.JoinHostPort(s.warpProxyAddr, strconv.Itoa(s.warpProxyPort))
-		dialer, err := proxy.SOCKS5("tcp", proxyAddr, nil, &net.Dialer{
-			Timeout:  10 * time.Second,
-			Resolver: s.resolver,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("warp proxy setup failed: %w", err)
+	if s.socksProxyAddr == "" {
+		dialer := &net.Dialer{
+			Timeout:   10 * time.Second,
+			KeepAlive: 30 * time.Second,
+			Resolver:  s.resolver,
 		}
 		conn, err := dialer.Dial("tcp4", addr)
 		if err != nil {
-			return nil, fmt.Errorf("dial via warp failed: %w", err)
+			return nil, fmt.Errorf("dial failed: %w", err)
 		}
 		return conn, nil
 	}
 
-	// Without WARP — direct connection.
+	proxyAddr := net.JoinHostPort(s.socksProxyAddr, strconv.Itoa(s.socksProxyPort))
 	dialer := &net.Dialer{
 		Timeout:   10 * time.Second,
 		KeepAlive: 30 * time.Second,
-		Resolver:  s.resolver,
 	}
-	conn, err := dialer.Dial("tcp4", addr)
+	conn, err := dialer.Dial("tcp4", proxyAddr)
 	if err != nil {
-		return nil, fmt.Errorf("dial failed: %w", err)
+		return nil, fmt.Errorf("failed to dial proxy: %w", err)
+	}
+
+	if err := s.socks5Connect(conn, req.Addr, req.Port); err != nil {
+		_ = conn.Close()
+		return nil, err
 	}
 	return conn, nil
 }
@@ -497,7 +644,7 @@ func (s *Server) socks5Connect(conn net.Conn, targetAddr string, targetPort int)
 	req := make([]byte, 0, 7+addrLen)
 	req = append(req, 5, 1, 0, 3, byte(addrLen))
 	req = append(req, []byte(targetAddr)...)
-	req = append(req, byte(targetPort>>8), byte(targetPort)) //nolint:gosec
+	req = append(req, byte(targetPort>>8), byte(targetPort)) //nolint:gosec,lll // G115: bounded conversion verified by surrounding logic
 
 	if _, err := conn.Write(req); err != nil {
 		return fmt.Errorf("failed to write socks5 connect req: %w", err)

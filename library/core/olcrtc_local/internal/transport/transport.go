@@ -34,11 +34,10 @@ type Transport interface {
 
 // Config holds common transport configuration.
 type Config struct {
-	Carrier string
-	RoomURL string
+	Carrier         string
+	RoomURL         string
 	// Engine, URL, Token are forwarded to carrier.Config for the "none" auth
 	// carrier (direct engine access without a service-specific auth flow).
-	// Mobile carriers (jazz/telemost/wbstream) leave these empty.
 	Engine          string
 	URL             string
 	Token           string
@@ -69,8 +68,7 @@ type Config struct {
 // Factory creates a transport instance.
 type Factory func(ctx context.Context, cfg Config) (Transport, error)
 
-//nolint:gochecknoglobals
-var registry = make(map[string]Factory)
+var registry = make(map[string]Factory) //nolint:gochecknoglobals // package-level state intentional
 
 // Register adds a transport factory to the registry.
 func Register(name string, factory Factory) {

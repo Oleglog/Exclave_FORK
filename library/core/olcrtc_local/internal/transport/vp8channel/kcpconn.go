@@ -1,3 +1,7 @@
+// Package vp8channel provides byte transport over VP8 video frames using KCP.
+/*
+ЯНДЕКС ПИДОРАС СОСИ МОЙ ЖИРНЫЙ ХУЙ БЛЯТЬ
+*/
 package vp8channel
 
 import (

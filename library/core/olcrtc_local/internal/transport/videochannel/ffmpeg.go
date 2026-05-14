@@ -26,6 +26,7 @@ const (
 
 	argCodecVideo = "-c:v"
 	argPixFmt     = "-pix_fmt"
+	codecLibVPX   = "libvpx"
 	pixFmtYUV420P = "yuv420p"
 )
 
@@ -43,6 +44,8 @@ var (
 )
 
 // FFmpegPath defines the path to the ffmpeg executable.
+//
+//nolint:gochecknoglobals // operator-controlled config overridden via CLI flag or FFMPEG_BIN env.
 var FFmpegPath = "ffmpeg"
 
 type codecSpec struct {
@@ -118,14 +121,14 @@ func vp8CodecSpec() codecSpec {
 	return codecSpec{
 		mimeType: webrtc.MimeTypeVP8,
 		fourCC:   "VP80",
-		encoder:  "libvpx",
+		encoder:  codecLibVPX,
 		capability: webrtc.RTPCodecCapability{
 			MimeType:  webrtc.MimeTypeVP8,
 			ClockRate: 90000,
 		},
 		depacketizer: func() rtp.Depacketizer { return &codecs.VP8Packet{} },
 		encodeArgs: []string{
-			argCodecVideo, "libvpx",
+			argCodecVideo, codecLibVPX,
 			"-deadline", "realtime",
 			"-cpu-used", "8",
 			"-lag-in-frames", "0",
@@ -210,15 +213,15 @@ func newFFmpegEncoder(
 			return nil, ErrFFmpegUnavailable
 		}
 	} else {
-		if _, err := os.Stat(ffmpegBin); err != nil {
-			return nil, fmt.Errorf("%w: %v", ErrFFmpegUnavailable, err)
+		if _, err := os.Stat(ffmpegBin); err != nil { //nolint:gosec,lll // G703: ffmpegBin is operator-controlled config, not user input.
+			return nil, fmt.Errorf("%w: %w", ErrFFmpegUnavailable, err)
 		}
 	}
 
 	vcodec := resolveEncoderCodec(spec, hw)
 	args := buildEncoderArgs(spec, vcodec, width, height, fps, bitrate)
 
-	cmd := exec.CommandContext(ctx, ffmpegBin, args...) //nolint:gosec
+	cmd := exec.CommandContext(ctx, ffmpegBin, args...) //nolint:gosec,lll // G204: ffmpeg path is operator-controlled config, not user input
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, fmt.Errorf("encoder stdin: %w", err)
@@ -423,15 +426,15 @@ func newFFmpegDecoder(
 			return nil, ErrFFmpegUnavailable
 		}
 	} else {
-		if _, err := os.Stat(ffmpegBin); err != nil {
-			return nil, fmt.Errorf("%w: %v", ErrFFmpegUnavailable, err)
+		if _, err := os.Stat(ffmpegBin); err != nil { //nolint:gosec,lll // G703: ffmpegBin is operator-controlled config, not user input.
+			return nil, fmt.Errorf("%w: %w", ErrFFmpegUnavailable, err)
 		}
 	}
 
 	decoderName := resolveDecoderName(spec, hw)
 	args := buildDecoderArgs(spec, decoderName, width, height, "gray")
 
-	cmd := exec.CommandContext(ctx, ffmpegBin, args...) //nolint:gosec
+	cmd := exec.CommandContext(ctx, ffmpegBin, args...) //nolint:gosec,lll // G204: ffmpeg path is operator-controlled config, not user input
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, fmt.Errorf("decoder stdin: %w", err)
@@ -566,9 +569,9 @@ func writeIVFHeader(w io.Writer, fourCC string, width, height, frameRate int) er
 	binary.LittleEndian.PutUint16(header[4:6], 0)
 	binary.LittleEndian.PutUint16(header[6:8], 32)
 	copy(header[8:12], []byte(fourCC))
-	binary.LittleEndian.PutUint16(header[12:14], uint16(width))     //nolint:gosec
-	binary.LittleEndian.PutUint16(header[14:16], uint16(height))    //nolint:gosec
-	binary.LittleEndian.PutUint32(header[16:20], uint32(frameRate)) //nolint:gosec
+	binary.LittleEndian.PutUint16(header[12:14], uint16(width)) //nolint:gosec,lll // G115: bounded conversion verified by surrounding logic
+	binary.LittleEndian.PutUint16(header[14:16], uint16(height)) //nolint:gosec,lll // G115: bounded conversion verified by surrounding logic
+	binary.LittleEndian.PutUint32(header[16:20], uint32(frameRate)) //nolint:gosec,lll // G115: bounded conversion verified by surrounding logic
 	binary.LittleEndian.PutUint32(header[20:24], 1)
 	binary.LittleEndian.PutUint32(header[24:28], 0)
 	binary.LittleEndian.PutUint32(header[28:32], 0)
@@ -577,7 +580,7 @@ func writeIVFHeader(w io.Writer, fourCC string, width, height, frameRate int) er
 
 func writeIVFFrame(w io.Writer, pts uint64, frame []byte) error {
 	header := make([]byte, 12)
-	binary.LittleEndian.PutUint32(header[0:4], uint32(len(frame))) //nolint:gosec
+	binary.LittleEndian.PutUint32(header[0:4], uint32(len(frame))) //nolint:gosec,lll // G115: bounded conversion verified by surrounding logic
 	binary.LittleEndian.PutUint64(header[4:12], pts)
 	if err := writeAll(w, header); err != nil {
 		return err
@@ -595,4 +598,3 @@ func writeAll(w io.Writer, data []byte) error {
 	}
 	return nil
 }
-

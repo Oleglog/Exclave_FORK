@@ -1,4 +1,4 @@
-// Package datachannel provides a transport backed by the current WebRTC providers.
+// Package datachannel provides a transport backed by the current carriers.
 package datachannel
 
 import (
@@ -15,7 +15,7 @@ type streamTransport struct {
 	stream carrier.ByteStream
 }
 
-// New creates a datachannel transport backed by a carrier-specific provider.
+// New creates a datachannel transport backed by a carrier.
 func New(ctx context.Context, cfg transport.Config) (transport.Transport, error) {
 	session, err := carrier.New(ctx, cfg.Carrier, carrier.Config{
 		RoomURL:   cfg.RoomURL,
@@ -29,7 +29,7 @@ func New(ctx context.Context, cfg transport.Config) (transport.Transport, error)
 		Token:     cfg.Token,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("create provider transport: %w", err)
+		return nil, fmt.Errorf("create carrier transport: %w", err)
 	}
 
 	streamCapable, ok := session.(carrier.ByteStreamCapable)
