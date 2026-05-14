@@ -91,11 +91,15 @@ func (p *Peer) Connect(ctx context.Context) error {
 				}
 			},
 		},
+		// LiveKit reconnects its WebRTC peer connection internally
+		// without losing reliable data-channel bytes, and the server
+		// side (engine/livekit) intentionally does not act on this
+		// event. Tearing down the client smux session here while the
+		// server keeps its old session causes an asymmetric reset:
+		// the client's fresh CLIENT_HELLO never gets a WELCOME back
+		// and the new control stream closes with EOF.
 		OnReconnected: func() {
-			log.Printf("WB Stream LiveKit reconnected")
-			if p.onReconnect != nil {
-				p.onReconnect(nil)
-			}
+			log.Printf("WB Stream LiveKit reconnected (smux session preserved)")
 		},
 		OnDisconnected: func() {
 			if p.onEnded != nil {
