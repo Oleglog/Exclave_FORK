@@ -10,10 +10,15 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/openlibrecommunity/olcrtc/internal/crypto"
+	"github.com/openlibrecommunity/olcrtc/internal/handshake"
 	"github.com/openlibrecommunity/olcrtc/internal/link"
 	"github.com/openlibrecommunity/olcrtc/internal/logger"
 	"github.com/openlibrecommunity/olcrtc/internal/muxconn"
@@ -40,113 +45,103 @@ var (
 
 // Client handles local SOCKS5 connections and tunnels them to the server.
 type Client struct {
-	ln        link.Link
-	cipher    *crypto.Cipher
-	conn      *muxconn.Conn
-	session   *smux.Session
-	sessMu    sync.RWMutex
-	dnsServer string
+	ln          link.Link
+	cipher      *crypto.Cipher
+	conn        *muxconn.Conn
+	session     *smux.Session
+	controlStrm *smux.Stream
+	sessMu      sync.RWMutex
+	deviceID    string
+	sessionID   string
+	claims      map[string]any
+	dnsServer   string
 }
 
-// Run starts the client with the specified parameters.
-func Run(
-	ctx context.Context,
-	linkName,
-	transportName,
-	carrierName,
-	roomURL,
-	keyHex string,
-	localAddr string,
-	dnsServer,
-	socksUser string,
-	socksPass string,
-	videoWidth int,
-	videoHeight int,
-	videoFPS int,
-	videoBitrate string,
-	videoHW string,
-	videoQRSize int,
-	videoQRRecovery string,
-	videoCodec string,
-	videoTileModule int,
-	videoTileRS int,
-	vp8FPS int,
-	vp8BatchSize int,
-	seiFPS int,
-	seiBatchSize int,
-	seiFragmentSize int,
-	seiAckTimeoutMS int,
-) error {
-	return RunWithReady(
-		ctx, linkName, transportName, carrierName, roomURL, keyHex, localAddr,
-		dnsServer, socksUser, socksPass, nil,
-		videoWidth, videoHeight, videoFPS, videoBitrate, videoHW,
-		videoQRSize, videoQRRecovery, videoCodec, videoTileModule, videoTileRS,
-		vp8FPS, vp8BatchSize,
-		seiFPS, seiBatchSize, seiFragmentSize, seiAckTimeoutMS,
-	)
+// Config holds runtime configuration for [Run] and [RunWithReady].
+type Config struct {
+	Link            string
+	Transport       string
+	Carrier         string
+	RoomURL         string
+	KeyHex          string
+	LocalAddr       string
+	DNSServer       string
+	SOCKSUser       string
+	SOCKSPass       string
+	VideoWidth      int
+	VideoHeight     int
+	VideoFPS        int
+	VideoBitrate    string
+	VideoHW         string
+	VideoQRSize     int
+	VideoQRRecovery string
+	VideoCodec      string
+	VideoTileModule int
+	VideoTileRS     int
+	VP8FPS          int
+	VP8BatchSize    int
+	SEIFPS          int
+	SEIBatchSize    int
+	SEIFragmentSize int
+	SEIAckTimeoutMS int
+	Engine          string
+	URL             string
+	Token           string
+
+	// DeviceID overrides the persistent client-side device identifier. Leave
+	// empty to derive one from DeviceIDPath (or generate a random one if both
+	// are empty).
+	DeviceID string
+
+	// DeviceIDPath is a file in which to persist the auto-generated device ID
+	// across restarts. Ignored when DeviceID is set explicitly.
+	DeviceIDPath string
+
+	// Claims is sent to the server in CLIENT_HELLO and forwarded verbatim to
+	// the server's AuthHook. Free-form key/value bag for plan, user, region, etc.
+	Claims map[string]any
 }
 
-// RunWithReady is like Run but accepts a callback that is called when the client is ready.
-func RunWithReady(
-	ctx context.Context,
-	linkName,
-	transportName,
-	carrierName,
-	roomURL,
-	keyHex string,
-	localAddr string,
-	dnsServer,
-	_ string,
-	_ string,
-	onReady func(),
-	videoWidth int,
-	videoHeight int,
-	videoFPS int,
-	videoBitrate string,
-	videoHW string,
-	videoQRSize int,
-	videoQRRecovery string,
-	videoCodec string,
-	videoTileModule int,
-	videoTileRS int,
-	vp8FPS int,
-	vp8BatchSize int,
-	seiFPS int,
-	seiBatchSize int,
-	seiFragmentSize int,
-	seiAckTimeoutMS int,
-) error {
+// Run starts the client with the given configuration.
+func Run(ctx context.Context, cfg Config) error {
+	return RunWithReady(ctx, cfg, nil)
+}
+
+// RunWithReady is like Run but invokes onReady once the local SOCKS listener is up.
+func RunWithReady(ctx context.Context, cfg Config, onReady func()) error {
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	cipher, err := setupCipher(keyHex)
+	cipher, err := setupCipher(cfg.KeyHex)
 	if err != nil {
 		return fmt.Errorf("setupCipher failed: %w", err)
 	}
 
-	c := &Client{cipher: cipher, dnsServer: dnsServer}
+	deviceID, err := resolveDeviceID(cfg.DeviceID, cfg.DeviceIDPath)
+	if err != nil {
+		return fmt.Errorf("resolve device id: %w", err)
+	}
 
-	if err := c.bringUpLink(
-		runCtx, linkName, transportName, carrierName, roomURL, cancel,
-		dnsServer, "", 0,
-		videoWidth, videoHeight, videoFPS, videoBitrate, videoHW,
-		videoQRSize, videoQRRecovery, videoCodec, videoTileModule, videoTileRS,
-		vp8FPS, vp8BatchSize,
-		seiFPS, seiBatchSize, seiFragmentSize, seiAckTimeoutMS,
-	); err != nil {
+	c := &Client{
+		cipher:    cipher,
+		deviceID:  deviceID,
+		claims:    cfg.Claims,
+		dnsServer: cfg.DNSServer,
+	}
+
+	if err := c.bringUpLink(runCtx, cfg, cancel); err != nil {
 		return err
 	}
 	defer c.shutdown()
 
 	lc := net.ListenConfig{}
-	listener, err := lc.Listen(runCtx, "tcp4", localAddr)
+	listener, err := lc.Listen(runCtx, "tcp4", cfg.LocalAddr)
 	if err != nil {
-		return fmt.Errorf("failed to listen on %s: %w", localAddr, err)
+		return fmt.Errorf("failed to listen on %s: %w", cfg.LocalAddr, err)
 	}
 	defer func() { _ = listener.Close() }()
 
-	logger.Infof("SOCKS5 server listening on %s", localAddr)
+	logger.Infof("SOCKS5 server listening on %s", cfg.LocalAddr)
 
 	if onReady != nil {
 		onReady()
@@ -160,44 +155,36 @@ func RunWithReady(
 
 func (c *Client) bringUpLink(
 	ctx context.Context,
-	linkName, transportName, carrierName, roomURL string,
+	cfg Config,
 	cancel context.CancelFunc,
-	dnsServer, socksProxyAddr string,
-	socksProxyPort int,
-	videoWidth, videoHeight, videoFPS int,
-	videoBitrate, videoHW string,
-	videoQRSize int,
-	videoQRRecovery string,
-	videoCodec string,
-	videoTileModule, videoTileRS int,
-	vp8FPS, vp8BatchSize int,
-	seiFPS, seiBatchSize, seiFragmentSize, seiAckTimeoutMS int,
 ) error {
-	ln, err := link.New(ctx, linkName, link.Config{
-		Transport:       transportName,
-		Carrier:         carrierName,
-		RoomURL:         roomURL,
+	ln, err := link.New(ctx, cfg.Link, link.Config{
+		Transport:       cfg.Transport,
+		Carrier:         cfg.Carrier,
+		RoomURL:         cfg.RoomURL,
+		Engine:          cfg.Engine,
+		URL:             cfg.URL,
+		Token:           cfg.Token,
+		DeviceID:        c.deviceID,
 		Name:            names.Generate(),
 		OnData:          c.onData,
-		DNSServer:       dnsServer,
-		ProxyAddr:       socksProxyAddr,
-		ProxyPort:       socksProxyPort,
-		VideoWidth:      videoWidth,
-		VideoHeight:     videoHeight,
-		VideoFPS:        videoFPS,
-		VideoBitrate:    videoBitrate,
-		VideoHW:         videoHW,
-		VideoQRSize:     videoQRSize,
-		VideoQRRecovery: videoQRRecovery,
-		VideoCodec:      videoCodec,
-		VideoTileModule: videoTileModule,
-		VideoTileRS:     videoTileRS,
-		VP8FPS:          vp8FPS,
-		VP8BatchSize:    vp8BatchSize,
-		SEIFPS:          seiFPS,
-		SEIBatchSize:    seiBatchSize,
-		SEIFragmentSize: seiFragmentSize,
-		SEIAckTimeoutMS: seiAckTimeoutMS,
+		DNSServer:       cfg.DNSServer,
+		VideoWidth:      cfg.VideoWidth,
+		VideoHeight:     cfg.VideoHeight,
+		VideoFPS:        cfg.VideoFPS,
+		VideoBitrate:    cfg.VideoBitrate,
+		VideoHW:         cfg.VideoHW,
+		VideoQRSize:     cfg.VideoQRSize,
+		VideoQRRecovery: cfg.VideoQRRecovery,
+		VideoCodec:      cfg.VideoCodec,
+		VideoTileModule: cfg.VideoTileModule,
+		VideoTileRS:     cfg.VideoTileRS,
+		VP8FPS:          cfg.VP8FPS,
+		VP8BatchSize:    cfg.VP8BatchSize,
+		SEIFPS:          cfg.SEIFPS,
+		SEIBatchSize:    cfg.SEIBatchSize,
+		SEIFragmentSize: cfg.SEIFragmentSize,
+		SEIAckTimeoutMS: cfg.SEIAckTimeoutMS,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create link: %w", err)
@@ -208,7 +195,13 @@ func (c *Client) bringUpLink(
 		logger.Infof("Client link reported conference end: %s", reason)
 		cancel()
 	})
-	ln.SetReconnectCallback(func() { c.handleReconnect() })
+	ln.SetShouldReconnect(func() bool { return ctx.Err() == nil })
+	ln.SetReconnectCallback(func() {
+		if ctx.Err() != nil {
+			return
+		}
+		c.handleReconnect()
+	})
 
 	if err := ln.Connect(ctx); err != nil {
 		return fmt.Errorf("failed to connect link: %w", err)
@@ -219,60 +212,201 @@ func (c *Client) bringUpLink(
 	if err != nil {
 		return fmt.Errorf("smux client: %w", err)
 	}
+
+	control, sid, err := openControlStream(sess, c.deviceID, c.claims)
+	if err != nil {
+		_ = sess.Close()
+		_ = c.conn.Close()
+		return fmt.Errorf("handshake: %w", err)
+	}
+	logger.Infof("session %s opened (device=%s)", sid, c.deviceID)
+
 	c.sessMu.Lock()
 	c.session = sess
+	c.controlStrm = control
+	c.sessionID = sid
 	c.sessMu.Unlock()
 
 	go ln.WatchConnection(ctx)
 	return nil
 }
 
+// openControlStream opens stream #1 on sess and performs the handshake.
+// The stream stays open for the lifetime of the smux session — the server
+// holds it parked, and it would carry future control messages.
+func openControlStream(
+	sess *smux.Session,
+	deviceID string,
+	claims map[string]any,
+) (*smux.Stream, string, error) {
+	return openControlStreamTimeout(sess, deviceID, claims, handshake.DefaultTimeout)
+}
+
+func openControlStreamTimeout(
+	sess *smux.Session,
+	deviceID string,
+	claims map[string]any,
+	timeout time.Duration,
+) (*smux.Stream, string, error) {
+	stream, err := sess.OpenStream()
+	if err != nil {
+		return nil, "", fmt.Errorf("open control stream: %w", err)
+	}
+	_ = stream.SetDeadline(time.Now().Add(timeout))
+	sid, err := handshake.Client(stream, deviceID, claims)
+	_ = stream.SetDeadline(time.Time{})
+	if err != nil {
+		_ = stream.Close()
+		return nil, "", fmt.Errorf("handshake client: %w", err)
+	}
+	return stream, sid, nil
+}
+
+// resolveDeviceID returns the device ID to send in CLIENT_HELLO.
+//
+// Precedence:
+//  1. Explicit deviceID arg (Config.DeviceID) — used verbatim.
+//  2. Persistent file at path (Config.DeviceIDPath) — read if it exists,
+//     otherwise generated and written for future runs.
+//  3. Random UUID per run when both inputs are empty.
+func resolveDeviceID(deviceID, path string) (string, error) {
+	if deviceID != "" {
+		return deviceID, nil
+	}
+	if path == "" {
+		return uuid.NewString(), nil
+	}
+	// #nosec G304 -- persistent device ID path is explicit user configuration.
+	data, err := os.ReadFile(path)
+	if err == nil {
+		id := strings.TrimSpace(string(data))
+		if id != "" {
+			return id, nil
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("read device id %s: %w", path, err)
+	}
+	id := uuid.NewString()
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return "", fmt.Errorf("mkdir device id dir: %w", err)
+	}
+	if err := os.WriteFile(path, []byte(id+"\n"), 0o600); err != nil {
+		return "", fmt.Errorf("write device id %s: %w", path, err)
+	}
+	return id, nil
+}
+
 // smuxConfig returns the tuned smux config used on both ends.
 func smuxConfig() *smux.Config {
 	cfg := smux.DefaultConfig()
 	cfg.Version = 2
+	cfg.KeepAliveDisabled = true
 	cfg.MaxFrameSize = 32768
 	cfg.MaxReceiveBuffer = 16 * 1024 * 1024
 	cfg.MaxStreamBuffer = 1024 * 1024
 	cfg.KeepAliveInterval = 10 * time.Second
-	cfg.KeepAliveTimeout = 120 * time.Second
+	cfg.KeepAliveTimeout = 60 * time.Second
 	return cfg
 }
 
 func (c *Client) handleReconnect() {
 	logger.Infof("client link reconnect - tearing down smux session")
+
+	// Install a fresh muxconn immediately so onData never hits nil while
+	// the old session is being torn down. tryReopenSession will swap it
+	// again with its own conn on each attempt.
+	newConn := muxconn.New(c.ln, c.cipher)
+
 	c.sessMu.Lock()
-	if c.session != nil {
-		_ = c.session.Close()
-		c.session = nil
-	}
-	if c.conn != nil {
-		_ = c.conn.Close()
-		c.conn = nil
-	}
+	oldControl := c.controlStrm
+	oldSess := c.session
+	oldConn := c.conn
+	c.conn = newConn
+	c.session = nil
+	c.controlStrm = nil
+	c.sessionID = ""
 	c.sessMu.Unlock()
-	c.conn = muxconn.New(c.ln, c.cipher)
-	sess, err := smux.Client(c.conn, smuxConfig())
-	if err != nil {
-		logger.Warnf("smux re-init failed: %v", err)
-		return
+
+	if oldControl != nil {
+		_ = oldControl.Close()
 	}
+	if oldSess != nil {
+		_ = oldSess.Close()
+	}
+	if oldConn != nil {
+		_ = oldConn.Close()
+	}
+
+	// Server-side may still be tearing down its own session when our callback
+	// fires — carriers don't guarantee reconnect callbacks are delivered to both
+	// peers atomically. Retry the handshake a few times, building a fresh
+	// muxconn+smux pair on each attempt so a failed smux.Close doesn't corrupt
+	// the byte stream for subsequent attempts.
+	const (
+		maxAttempts  = 5
+		attemptDelay = 300 * time.Millisecond
+	)
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if c.tryReopenSession(attempt) {
+			return
+		}
+		time.Sleep(attemptDelay)
+	}
+	logger.Warnf("client reconnect: exhausted %d handshake attempts", maxAttempts)
+}
+
+func (c *Client) tryReopenSession(attempt int) bool {
+	conn := muxconn.New(c.ln, c.cipher)
+
+	c.sessMu.Lock()
+	old := c.conn
+	c.conn = conn
+	c.sessMu.Unlock()
+	if old != nil {
+		_ = old.Close()
+	}
+
+	sess, err := smux.Client(conn, smuxConfig())
+	if err != nil {
+		logger.Warnf("smux re-init failed (attempt %d): %v", attempt, err)
+		return false
+	}
+	control, sid, err := openControlStreamTimeout(sess, c.deviceID, c.claims, 2*time.Second)
+	if err != nil {
+		logger.Warnf("handshake on reconnect failed (attempt %d): %v", attempt, err)
+		_ = sess.Close()
+		return false
+	}
+	logger.Infof("session %s reopened (device=%s)", sid, c.deviceID)
 	c.sessMu.Lock()
 	c.session = sess
+	c.controlStrm = control
+	c.sessionID = sid
 	c.sessMu.Unlock()
+	return true
 }
 
 func (c *Client) shutdown() {
 	c.sessMu.Lock()
-	if c.session != nil {
-		_ = c.session.Close()
-	}
-	if c.conn != nil {
-		_ = c.conn.Close()
-	}
+	control := c.controlStrm
+	sess := c.session
+	conn := c.conn
+	c.controlStrm = nil
+	c.session = nil
+	c.conn = nil
 	c.sessMu.Unlock()
+
+	if conn != nil {
+		_ = conn.Close()
+	}
 	if c.ln != nil {
 		_ = c.ln.Close()
+	}
+	if control != nil {
+		_ = control.Close()
+	}
+	if sess != nil {
+		_ = sess.Close()
 	}
 }
 

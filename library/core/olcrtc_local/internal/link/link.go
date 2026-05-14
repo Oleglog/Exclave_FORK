@@ -25,9 +25,16 @@ type Link interface {
 
 // Config holds common link configuration.
 type Config struct {
-	Transport       string
-	Carrier         string
-	RoomURL         string
+	Transport string
+	Carrier   string
+	RoomURL   string
+	// Engine, URL, Token are forwarded to carriers that bypass the legacy
+	// auth flow (the "none" auth carrier accessing an engine directly).
+	// Mobile carriers (jazz/telemost/wbstream) leave these empty.
+	Engine          string
+	URL             string
+	Token           string
+	DeviceID        string
 	Name            string
 	OnData          func([]byte)
 	DNSServer       string

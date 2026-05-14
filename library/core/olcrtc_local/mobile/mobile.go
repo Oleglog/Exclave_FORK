@@ -208,36 +208,24 @@ func startWithConfig(
 
 		err := client.RunWithReady(
 			ctx,
-			cfg.link,
-			cfg.transport,
-			carrierName,
-			roomURL,
-			keyHex,
-			fmt.Sprintf("127.0.0.1:%d", socksPort),
-			cfg.dnsServer,
-			socksUser,
-			socksPass,
+			client.Config{
+				Link:         cfg.link,
+				Transport:    cfg.transport,
+				Carrier:      carrierName,
+				RoomURL:      roomURL,
+				KeyHex:       keyHex,
+				LocalAddr:    fmt.Sprintf("127.0.0.1:%d", socksPort),
+				DNSServer:    cfg.dnsServer,
+				SOCKSUser:    socksUser,
+				SOCKSPass:    socksPass,
+				VP8FPS:       cfg.vp8FPS,
+				VP8BatchSize: cfg.vp8BatchSize,
+			},
 			func() {
 				readyOnce.Do(func() {
 					close(localReady)
 				})
 			},
-			0,
-			0,
-			0,
-			"",
-			"",
-			0,
-			"",
-			"",
-			0,
-			0,
-			cfg.vp8FPS,
-			cfg.vp8BatchSize,
-			0,
-			0,
-			0,
-			0,
 		)
 
 		mu.Lock()
