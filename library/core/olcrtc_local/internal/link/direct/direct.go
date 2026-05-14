@@ -18,6 +18,10 @@ func New(ctx context.Context, cfg link.Config) (link.Link, error) {
 	tr, err := transport.New(ctx, cfg.Transport, transport.Config{
 		Carrier:         cfg.Carrier,
 		RoomURL:         cfg.RoomURL,
+		Engine:          cfg.Engine,
+		URL:             cfg.URL,
+		Token:           cfg.Token,
+		DeviceID:        cfg.DeviceID,
 		Name:            cfg.Name,
 		OnData:          cfg.OnData,
 		DNSServer:       cfg.DNSServer,

@@ -34,8 +34,15 @@ type Transport interface {
 
 // Config holds common transport configuration.
 type Config struct {
-	Carrier         string
-	RoomURL         string
+	Carrier string
+	RoomURL string
+	// Engine, URL, Token are forwarded to carrier.Config for the "none" auth
+	// carrier (direct engine access without a service-specific auth flow).
+	// Mobile carriers (jazz/telemost/wbstream) leave these empty.
+	Engine          string
+	URL             string
+	Token           string
+	DeviceID        string
 	Name            string
 	OnData          func([]byte)
 	DNSServer       string
