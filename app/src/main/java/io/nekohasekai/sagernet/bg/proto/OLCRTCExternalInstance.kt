@@ -111,7 +111,7 @@ class OLCRTCExternalInstance(
             username,
             password,
         )
-        Mobile.waitReady(15_000L)
+        Mobile.waitReady(30_000L)
     }
 
     override fun launch() {
