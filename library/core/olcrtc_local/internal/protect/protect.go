@@ -70,21 +70,25 @@ func NewDialer() *net.Dialer {
 // to the configured DNS server is protected from VPN routing. This is
 // what we plug into NewHTTPClient so that even the resolver lookups
 // triggered by the auth providers bypass the TUN interface.
+//
+// We force TCP ("tcp4") because many Russian mobile carriers intercept or
+// block outbound UDP/53 to external resolvers (the packet leaves the
+// physical interface after protect() but gets ICMP port-unreachable back).
+// TCP/53 to 1.1.1.1 / 8.8.8.8 is reliably reachable on the same carriers.
 func newProtectedResolver() *net.Resolver {
 	if HTTPDNSServer == "" {
 		return net.DefaultResolver
 	}
 	return &net.Resolver{
 		PreferGo: true,
-		Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+		Dial: func(ctx context.Context, _, _ string) (net.Conn, error) {
 			d := net.Dialer{
 				Timeout: dialTimeout,
 				Control: controlFunc,
 			}
-			// The resolver passes "udp" / "tcp" here; route both to our
-			// configured upstream so we never hit the system resolver while
-			// the VpnService is up.
-			return d.DialContext(ctx, network, HTTPDNSServer)
+			// Always use TCP to the configured upstream. UDP/53 is
+			// unreliable on mobile carriers that MITM or block it.
+			return d.DialContext(ctx, "tcp4", HTTPDNSServer)
 		},
 	}
 }
