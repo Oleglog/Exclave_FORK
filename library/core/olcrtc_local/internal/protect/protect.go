@@ -22,7 +22,7 @@ var Protector func(fd int) bool //nolint:gochecknoglobals // package-level state
 // through the TUN interface and races with the very session the
 // HTTP call is trying to set up. Empty string falls back to the system
 // resolver (used in tests).
-var HTTPDNSServer = "1.1.1.1:53" //nolint:gochecknoglobals // package-level state intentional
+var HTTPDNSServer = "77.88.8.8:53" //nolint:gochecknoglobals // package-level state intentional
 
 // dialTimeout / keepAlive are kept conservative so a stalled hop in the
 // auth path surfaces quickly instead of starving the whole startup.

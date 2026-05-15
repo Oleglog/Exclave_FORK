@@ -117,6 +117,7 @@ class OLCRTCExternalInstance(
 
         Mobile.setTransport(transport)
         Mobile.setLink("direct")
+        Mobile.setDNS(bean.dnsServer.ifEmpty { "77.88.8.8:53" })
 
         if (transport == OLCRTCBean.TRANSPORT_VP8CHANNEL) {
             Mobile.setVP8Options(
