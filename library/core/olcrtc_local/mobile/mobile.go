@@ -130,12 +130,20 @@ func SetLink(link string) {
 	defaults.link = link
 }
 
-// SetDNS selects the DNS server used by the tunnel.
+// SetDNS selects the DNS server used by the tunnel and the auth-path
+// HTTP resolver. Empty string keeps the previous value untouched.
 func SetDNS(dnsServer string) {
 	mu.Lock()
 	defer mu.Unlock()
 	ensureDefaultConfigLocked()
+	if dnsServer == "" {
+		return
+	}
 	defaults.dnsServer = dnsServer
+	// Mirror the value into protect.HTTPDNSServer so auth providers
+	// (salutejazz / telemost / wbstream) reach their HTTP APIs through
+	// the same protected resolver as the tunnel itself.
+	protect.HTTPDNSServer = dnsServer
 }
 
 // SetVP8Options configures vp8channel.
@@ -563,6 +571,15 @@ func startWithConfig(
 	}
 
 	roomURL := buildRoomURL(carrierName, roomID)
+
+	// Pin the auth-path HTTP resolver to the same DNS server we configured
+	// for the tunnel. Without this, salutejazz/telemost/wbstream HTTP calls
+	// fall through to the system resolver — which on Android, while the
+	// VpnService is active, races with the very session we're trying to
+	// establish and routinely returns ENETUNREACH.
+	if cfg.dnsServer != "" {
+		protect.HTTPDNSServer = cfg.dnsServer
+	}
 
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	cancel = cancelFunc
