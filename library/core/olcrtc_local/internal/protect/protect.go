@@ -123,9 +123,16 @@ func NewHTTPClient() *http.Client {
 	}
 }
 
-// DialContext dials using a protected socket.
+// DialContext dials using a protected socket with a protected resolver.
+// Forces tcp4 for plain "tcp" networks (same as NewHTTPClient) to avoid
+// IPv6 routing issues on mobile carriers.
 func DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	conn, err := NewDialer().DialContext(ctx, network, address)
+	if !strings.HasSuffix(network, "4") && !strings.HasSuffix(network, "6") {
+		network = network + "4"
+	}
+	d := NewDialer()
+	d.Resolver = newProtectedResolver()
+	conn, err := d.DialContext(ctx, network, address)
 	if err != nil {
 		return nil, fmt.Errorf("dial failed: %w", err)
 	}
@@ -136,8 +143,14 @@ func DialContext(ctx context.Context, network, address string) (net.Conn, error)
 type ProxyDialer struct{}
 
 // Dial connects to the address on the named network using a protected socket.
+// Forces tcp4 for plain "tcp" to match DialContext behaviour.
 func (d *ProxyDialer) Dial(network, addr string) (net.Conn, error) {
-	conn, err := NewDialer().Dial(network, addr)
+	if !strings.HasSuffix(network, "4") && !strings.HasSuffix(network, "6") {
+		network = network + "4"
+	}
+	dialer := NewDialer()
+	dialer.Resolver = newProtectedResolver()
+	conn, err := dialer.Dial(network, addr)
 	if err != nil {
 		return nil, fmt.Errorf("dial failed: %w", err)
 	}
