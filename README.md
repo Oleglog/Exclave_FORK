@@ -1,4 +1,5 @@
 # olcRTC for Android (fork of Exclave)
+## В разарботке. Пилим под [новую ветку](https://github.com/openlibrecommunity/olcrtc/tree/refactor/universal-carrier) так что может вообще не работать.
 
 > **Android-клиент для [olcRTC](https://github.com/Oleglog/Olcrtc_manager)** —
 > туннеля, прячущего трафик внутри WebRTC-сессий публичных российских
