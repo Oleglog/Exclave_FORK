@@ -739,6 +739,8 @@ func normalizeTransport(value string) string {
 		return dataTransport
 	case defaultTransport, "vp8":
 		return defaultTransport
+	case "seichannel", "sei":
+		return "seichannel"
 	default:
 		return defaultTransport
 	}
@@ -776,6 +778,10 @@ func buildRoomURL(carrierName, roomID string) string {
 		}
 		return roomID
 	case carrierWBStream:
+		return roomID
+	case "jitsi":
+		// Jitsi room URL is just the room name; the engine handles
+		// connecting to the configured Jitsi server.
 		return roomID
 	default:
 		return roomID

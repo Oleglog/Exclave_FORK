@@ -156,10 +156,49 @@ class OLCRTCExternalInstance(
                 Mobile.stop()
             } catch (_: Exception) {
             }
-            throw e
+            throw classifyAndWrapError(e)
         }
         started = true
         startKeepalive()
+    }
+
+    /**
+     * Classifies the raw Go/transport exception into a user-friendly message.
+     * - Configuration errors (missing clientID, bad key) → no retry, clear message.
+     * - Provider unavailable (connection refused, 502, timeout) → retryable.
+     * - Handshake mismatch (got CLIENT_HELLO) → server not in room.
+     */
+    private fun classifyAndWrapError(e: Exception): Exception {
+        val msg = e.message.orEmpty()
+        return when {
+            msg.contains("clientID") || msg.contains("Client ID") ||
+                msg.contains("keyHex") || msg.contains("carrier is required") ->
+                IllegalStateException("olcRTC configuration error: $msg", e)
+
+            msg.contains("unexpected handshake message: got \"CLIENT_HELLO\"") ->
+                IllegalStateException(
+                    "olcRTC: server is not connected to the room. " +
+                        "The client received its own CLIENT_HELLO back. " +
+                        "Ensure the server is running and joined the same room.",
+                    e,
+                )
+
+            msg.contains("connection refused") || msg.contains("502") ||
+                msg.contains("connect: connect to room") || msg.contains("dial failed") ->
+                IllegalStateException(
+                    "olcRTC: provider is unavailable ($msg). " +
+                        "The WebRTC provider may be temporarily down. Try a different provider.",
+                    e,
+                )
+
+            msg.contains("timed out") || msg.contains("timeout") ->
+                IllegalStateException(
+                    "olcRTC: connection timed out. Check your network or try a different provider.",
+                    e,
+                )
+
+            else -> e
+        }
     }
 
     private fun onSessionLost(reason: String) {

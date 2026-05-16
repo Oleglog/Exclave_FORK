@@ -364,12 +364,14 @@
         <item>Yandex Telemost</item>
         <item>SaluteJazz</item>
         <item>Wildberries Stream</item>
+        <item>Jitsi</item>
     </string-array>
 
     <string-array name="olcrtc_provider_value">
         <item>telemost</item>
         <item>jazz</item>
         <item>wbstream</item>
+        <item>jitsi</item>
     </string-array>
 
     <string-array name="olcrtc_transport_entry">

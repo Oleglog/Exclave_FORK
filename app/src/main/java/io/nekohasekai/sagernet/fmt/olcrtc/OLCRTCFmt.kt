@@ -8,6 +8,7 @@ private val VALID_PROVIDERS = setOf(
     OLCRTCBean.PROVIDER_TELEMOST,
     OLCRTCBean.PROVIDER_JAZZ,
     OLCRTCBean.PROVIDER_WB_STREAM,
+    OLCRTCBean.PROVIDER_JITSI,
     "wb_stream",
 )
 

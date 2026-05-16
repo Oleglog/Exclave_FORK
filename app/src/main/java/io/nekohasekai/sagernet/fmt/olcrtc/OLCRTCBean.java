@@ -34,6 +34,7 @@ public class OLCRTCBean extends AbstractBean {
     public static final String PROVIDER_TELEMOST = "telemost";
     public static final String PROVIDER_JAZZ = "jazz";
     public static final String PROVIDER_WB_STREAM = "wbstream";
+    public static final String PROVIDER_JITSI = "jitsi";
 
     public static final String TRANSPORT_DATACHANNEL = "datachannel";
     public static final String TRANSPORT_VP8CHANNEL = "vp8channel";
