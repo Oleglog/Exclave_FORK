@@ -57,13 +57,13 @@ public class OLCRTCBean extends AbstractBean {
         if (serverAddress == null || serverAddress.isEmpty()) serverAddress = "olcrtc";
         if (serverPort == null || serverPort == 0) serverPort = 1;
         super.initializeDefaultValues();
-        if (provider == null || provider.isEmpty()) provider = PROVIDER_TELEMOST;
+        if (provider == null || provider.isEmpty()) provider = PROVIDER_JAZZ;
         if (transport == null || transport.isEmpty()) transport = TRANSPORT_DATACHANNEL;
         if (roomId == null) roomId = "";
         if (roomPassword == null) roomPassword = "";
         if (clientId == null) clientId = "";
         if (keyHex == null) keyHex = "";
-        if (dnsServer == null || dnsServer.isEmpty()) dnsServer = "1.1.1.1:53";
+        if (dnsServer == null || dnsServer.isEmpty()) dnsServer = "77.88.8.8:53";
         if (vp8Fps <= 0) vp8Fps = 60;
         if (vp8BatchSize <= 0) vp8BatchSize = 8;
         if (keepaliveIntervalSec <= 0) keepaliveIntervalSec = 15;

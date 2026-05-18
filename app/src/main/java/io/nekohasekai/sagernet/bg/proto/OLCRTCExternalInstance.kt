@@ -247,7 +247,7 @@ class OLCRTCExternalInstance(
                         Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", port))
                     )
                     socket.soTimeout = 5_000
-                    socket.connect(InetSocketAddress("1.1.1.1", 53), 5_000)
+                    socket.connect(InetSocketAddress("77.88.8.8", 53), 5_000)
                     socket.close()
                     Logs.d("[olcrtc] keepalive OK")
                 } catch (e: Exception) {

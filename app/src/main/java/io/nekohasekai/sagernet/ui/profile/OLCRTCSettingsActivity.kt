@@ -75,7 +75,7 @@ class OLCRTCSettingsActivity : ProfileSettingsActivity<OLCRTCBean>() {
         // DataStore so the value survives configuration changes during edit.
         clientId = DataStore.serverOlcrtcClientId.orEmpty()
         keyHex = DataStore.serverOlcrtcKeyHex
-        dnsServer = DataStore.serverOlcrtcDnsServer.ifEmpty { "1.1.1.1:53" }
+        dnsServer = DataStore.serverOlcrtcDnsServer.ifEmpty { "77.88.8.8:53" }
         vp8Fps = DataStore.serverOlcrtcVp8Fps
         vp8BatchSize = DataStore.serverOlcrtcVp8BatchSize
         keepaliveIntervalSec = DataStore.serverOlcrtcKeepaliveInterval.let { if (it <= 0) 15 else it }
