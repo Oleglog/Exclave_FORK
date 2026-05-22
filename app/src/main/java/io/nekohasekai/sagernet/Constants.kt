@@ -268,6 +268,22 @@ object Key {
      */
     const val SERVER_OLCRTC_CLIENT_ID = "serverOlcrtcClientId"
 
+    const val SERVER_VKTURN_VK_LINK = "serverVkturnVkLink"
+    const val SERVER_VKTURN_VLESS_MODE = "serverVkturnVlessMode"
+    const val SERVER_VKTURN_VLESS_BOND = "serverVkturnVlessBond"
+    const val SERVER_VKTURN_STREAMS = "serverVkturnStreams"
+    const val SERVER_VKTURN_STREAMS_PER_CRED = "serverVkturnStreamsPerCred"
+    const val SERVER_VKTURN_UDP_TO_TURN = "serverVkturnUdpToTurn"
+    const val SERVER_VKTURN_MANUAL_CAPTCHA = "serverVkturnManualCaptcha"
+    const val SERVER_VKTURN_WRAP_ENABLED = "serverVkturnWrapEnabled"
+    const val SERVER_VKTURN_WRAP_KEY_HEX = "serverVkturnWrapKeyHex"
+    const val SERVER_VKTURN_DEBUG = "serverVkturnDebug"
+    const val SERVER_VKTURN_DNS_MODE = "serverVkturnDnsMode"
+    const val SERVER_VKTURN_DNS_SERVERS = "serverVkturnDnsServers"
+    const val SERVER_VKTURN_TURN_HOST = "serverVkturnTurnHost"
+    const val SERVER_VKTURN_TURN_PORT = "serverVkturnTurnPort"
+    const val SERVER_VKTURN_TARGET_PROFILE = "serverVkturnTargetProfile"
+
     const val SERVER_SING_UOT_CATEGORY = "serverSingUotCategory"
     const val SERVER_SING_MUX_CATEGORY = "serverSingMuxCategory"
     const val SERVER_SING_UOT = "serverSingUot"

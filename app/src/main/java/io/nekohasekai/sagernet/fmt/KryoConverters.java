@@ -51,6 +51,7 @@ import io.nekohasekai.sagernet.fmt.tuic5.Tuic5Bean;
 import io.nekohasekai.sagernet.fmt.shadowtls.ShadowTLSBean;
 import io.nekohasekai.sagernet.fmt.v2ray.VLESSBean;
 import io.nekohasekai.sagernet.fmt.v2ray.VMessBean;
+import io.nekohasekai.sagernet.fmt.vkturn.VKTurnBean;
 import io.nekohasekai.sagernet.fmt.wireguard.WireGuardBean;
 import io.nekohasekai.sagernet.ktx.KryosKt;
 import io.nekohasekai.sagernet.ktx.Logs;
@@ -201,6 +202,12 @@ public class KryoConverters {
     public static OLCRTCBean olcrtcDeserialize(byte[] bytes) {
         if (bytes == null || bytes.length == 0) return null;
         return deserialize(new OLCRTCBean(), bytes);
+    }
+
+    @TypeConverter
+    public static VKTurnBean vkturnDeserialize(byte[] bytes) {
+        if (bytes == null || bytes.length == 0) return null;
+        return deserialize(new VKTurnBean(), bytes);
     }
 
     @TypeConverter

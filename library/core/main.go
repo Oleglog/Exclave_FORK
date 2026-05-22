@@ -30,4 +30,5 @@ import (
 	// olcrtc as a separate AAR produces a duplicate Go runtime (libgojni.so
 	// + go.* classes) which Android refuses to package together.
 	_ "github.com/openlibrecommunity/olcrtc/mobile"
+	_ "github.com/cacggghp/vk-turn-proxy/mobile"
 )

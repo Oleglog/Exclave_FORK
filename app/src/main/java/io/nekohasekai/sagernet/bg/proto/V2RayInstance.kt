@@ -39,6 +39,7 @@ import io.nekohasekai.sagernet.fmt.naive.buildNaiveConfig
 import io.nekohasekai.sagernet.fmt.olcrtc.OLCRTCBean
 import io.nekohasekai.sagernet.fmt.shadowquic.ShadowQUICBean
 import io.nekohasekai.sagernet.fmt.shadowquic.buildShadowQUICConfig
+import io.nekohasekai.sagernet.fmt.vkturn.VKTurnBean
 import io.nekohasekai.sagernet.ktx.*
 import io.nekohasekai.sagernet.plugin.PluginManager
 import kotlinx.coroutines.*
@@ -104,6 +105,16 @@ abstract class V2RayInstance(
                         externalInstances[port] = OLCRTCExternalInstance(
                             bean, port, username, password
                         ) { msg ->
+                            val svc = (this@V2RayInstance as? ProxyInstance)?.service
+                            if (svc != null) {
+                                kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                                    svc.stopRunner(false, msg)
+                                }
+                            }
+                        }
+                    }
+                    is VKTurnBean -> {
+                        externalInstances[port] = VKTurnExternalInstance(bean, port) { msg ->
                             val svc = (this@V2RayInstance as? ProxyInstance)?.service
                             if (svc != null) {
                                 kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {

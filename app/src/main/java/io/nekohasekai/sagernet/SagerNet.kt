@@ -251,6 +251,10 @@ class SagerNet : Application(),
                             "service-subscription",
                             application.getText(R.string.service_subscription),
                             NotificationManager.IMPORTANCE_DEFAULT
+                        ), NotificationChannel(
+                            "service-captcha",
+                            application.getText(R.string.vkturn_captcha_channel),
+                            NotificationManager.IMPORTANCE_HIGH
                         )
                     )
                 )

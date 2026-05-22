@@ -60,6 +60,10 @@
                         android:title="olcRTC"
                         tools:ignore="HardcodedText" />
                     <item
+                        android:id="@+id/action_new_vkturn"
+                        android:title="VK TURN"
+                        tools:ignore="HardcodedText" />
+                    <item
                         android:id="@+id/action_new_config"
                         android:title="@string/custom_config" />
                     <item

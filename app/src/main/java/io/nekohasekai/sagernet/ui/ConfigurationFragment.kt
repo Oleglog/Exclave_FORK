@@ -488,6 +488,9 @@ class ConfigurationFragment @JvmOverloads constructor(
             R.id.action_new_olcrtc -> {
                 startActivity(Intent(requireActivity(), OLCRTCSettingsActivity::class.java))
             }
+            R.id.action_new_vkturn -> {
+                startActivity(Intent(requireActivity(), VKTurnSettingsActivity::class.java))
+            }
             R.id.action_new_config -> {
                 startActivity(Intent(requireActivity(), ConfigSettingsActivity::class.java))
             }

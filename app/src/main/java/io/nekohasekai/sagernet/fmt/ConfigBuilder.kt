@@ -105,6 +105,7 @@ import io.nekohasekai.sagernet.fmt.v2ray.V2RayConfig.WebSocketObject
 import io.nekohasekai.sagernet.fmt.v2ray.V2RayConfig.WireGuardOutboundConfigurationObject
 import io.nekohasekai.sagernet.fmt.v2ray.VLESSBean
 import io.nekohasekai.sagernet.fmt.v2ray.VMessBean
+import io.nekohasekai.sagernet.fmt.vkturn.VKTurnBean
 import io.nekohasekai.sagernet.fmt.wireguard.WireGuardBean
 import io.nekohasekai.sagernet.ktx.app
 import io.nekohasekai.sagernet.ktx.getArray
@@ -201,6 +202,26 @@ fun buildV2RayConfig(
     }
 
     fun ProxyEntity.resolveChain(): MutableList<ProxyEntity> {
+        if (type == ProxyEntity.TYPE_VKTURN) {
+            val targetProfileId = vkTurnBean?.targetProfileId ?: 0L
+            if (targetProfileId <= 0L) {
+                error("VK TURN target profile is not selected")
+            }
+            val target = SagerDatabase.proxyDao.getById(targetProfileId)
+                ?: error("VK TURN target profile not found")
+            if (target.type != ProxyEntity.TYPE_VLESS && target.type != ProxyEntity.TYPE_WG) {
+                error("VK TURN target must be VLESS or WireGuard")
+            }
+            if (target.type == ProxyEntity.TYPE_VLESS && vkTurnBean?.vlessMode != true) {
+                error("VK TURN VLESS mode must be enabled for a VLESS target")
+            }
+            if (target.type == ProxyEntity.TYPE_WG && vkTurnBean?.vlessMode == true) {
+                error("VK TURN VLESS mode must be disabled for a WireGuard target")
+            }
+            return target.resolveChainRecursively().asReversed().toMutableList().apply {
+                add(this@resolveChain)
+            }
+        }
         if (type == ProxyEntity.TYPE_BALANCER) {
             val beans = if (balancerBean!!.type == BalancerBean.TYPE_LIST) {
                 SagerDatabase.proxyDao.getEntities(balancerBean!!.proxies)
@@ -645,36 +666,49 @@ fun buildV2RayConfig(
 
                     if (proxyEntity.needExternal()) {
                         val localPort = mkPort()
-                        // olcrtc's local SOCKS5 listener does not enforce
-                        // credentials (the upstream client.RunWithReady
-                        // discards user/pass), so V2Ray must talk to it with
-                        // method=NO_AUTH. For other external proxies (Naive,
-                        // ShadowQUIC) we keep generated credentials so the
-                        // local listener can authenticate the loopback caller.
-                        val isOLCRTC = proxyEntity.olcrtcBean != null
-                        val username = if (isOLCRTC) "" else Uuid.generateV4().toHexString()
-                        val password = if (isOLCRTC) "" else Uuid.generateV4().toHexString()
-                        chainMap[Triple(localPort, username, password)] = proxyEntity
-                        currentOutbound.apply {
-                            protocol = "socks"
-                            settings = LazyOutboundConfigurationObject(this, SocksOutboundConfigurationObject().apply {
-                                servers = listOf(SocksOutboundConfigurationObject.ServerObject().apply {
-                                    address = LOCALHOST
-                                    port = localPort
-                                    if (!isOLCRTC) {
-                                        users = listOf(SocksOutboundConfigurationObject.ServerObject.UserObject().apply {
-                                            user = username
-                                            pass = password
-                                        })
+                        if (bean is VKTurnBean) {
+                            chainMap[Triple(localPort, "", "")] = proxyEntity
+                            currentOutbound.apply {
+                                protocol = "freedom"
+                                settings = LazyOutboundConfigurationObject(this,
+                                    FreedomOutboundConfigurationObject().apply {
+                                        redirect = joinHostPort(LOCALHOST, localPort)
+                                        interruptConnections = true
+                                    })
+                            }
+                            directNeedsInterruption = true
+                        } else {
+                            // olcrtc's local SOCKS5 listener does not enforce
+                            // credentials (the upstream client.RunWithReady
+                            // discards user/pass), so V2Ray must talk to it with
+                            // method=NO_AUTH. For other external proxies (Naive,
+                            // ShadowQUIC) we keep generated credentials so the
+                            // local listener can authenticate the loopback caller.
+                            val isOLCRTC = proxyEntity.olcrtcBean != null
+                            val username = if (isOLCRTC) "" else Uuid.generateV4().toHexString()
+                            val password = if (isOLCRTC) "" else Uuid.generateV4().toHexString()
+                            chainMap[Triple(localPort, username, password)] = proxyEntity
+                            currentOutbound.apply {
+                                protocol = "socks"
+                                settings = LazyOutboundConfigurationObject(this, SocksOutboundConfigurationObject().apply {
+                                    servers = listOf(SocksOutboundConfigurationObject.ServerObject().apply {
+                                        address = LOCALHOST
+                                        port = localPort
+                                        if (!isOLCRTC) {
+                                            users = listOf(SocksOutboundConfigurationObject.ServerObject.UserObject().apply {
+                                                user = username
+                                                pass = password
+                                            })
+                                        }
+                                    })
+                                    if (proxyEntity.naiveBean != null && proxyEntity.naiveBean!!.singUoT && DataStore.experimentalFlagsProperties.getBooleanProperty( "singuot")) {
+                                        uot = true
+                                    }
+                                    if (proxyEntity.naiveBean != null || proxyEntity.shadowquicBean != null) {
+                                        directNeedsInterruption = true
                                     }
                                 })
-                                if (proxyEntity.naiveBean != null && proxyEntity.naiveBean!!.singUoT && DataStore.experimentalFlagsProperties.getBooleanProperty( "singuot")) {
-                                    uot = true
-                                }
-                                if (proxyEntity.naiveBean != null || proxyEntity.shadowquicBean != null) {
-                                    directNeedsInterruption = true
-                                }
-                            })
+                            }
                         }
                     } else {
                         currentOutbound.apply {

@@ -388,6 +388,18 @@
         <item>videochannel</item>
     </string-array>
 
+    <string-array name="vkturn_dns_mode_entry">
+        <item>Auto</item>
+        <item>UDP</item>
+        <item>DoH</item>
+    </string-array>
+
+    <string-array name="vkturn_dns_mode_value">
+        <item>auto</item>
+        <item>udp</item>
+        <item>doh</item>
+    </string-array>
+
     <string-array name="config_type_entry">
         <item>V2Ray</item>
         <item>V2Ray Outbound</item>

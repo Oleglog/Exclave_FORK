@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <EditTextPreference
+        app:icon="@drawable/ic_social_emoji_symbols"
+        app:key="profileName"
+        app:title="@string/profile_name"
+        app:useSimpleSummaryProvider="true" />
+
+    <PreferenceCategory app:title="@string/vkturn_connection_cat">
+
+        <EditTextPreference
+            app:icon="@drawable/ic_hardware_router"
+            app:key="serverAddress"
+            app:title="@string/server_address"
+            app:useSimpleSummaryProvider="true" />
+
+        <EditTextPreference
+            android:defaultValue="56000"
+            android:inputType="number"
+            app:icon="@drawable/ic_hardware_router"
+            app:key="serverPort"
+            app:title="@string/server_port"
+            app:useSimpleSummaryProvider="true" />
+
+        <EditTextPreference
+            app:icon="@drawable/ic_baseline_link_24"
+            app:key="serverVkturnVkLink"
+            app:summary="@string/vkturn_vk_link_summary"
+            app:title="@string/vkturn_vk_link"
+            app:useSimpleSummaryProvider="true" />
+
+        <SwitchPreference
+            app:icon="@drawable/ic_baseline_speed_24"
+            app:key="serverVkturnVlessMode"
+            app:summary="@string/vkturn_vless_mode_summary"
+            app:title="@string/vkturn_vless_mode" />
+
+        <SwitchPreference
+            app:icon="@drawable/ic_baseline_layers_24"
+            app:key="serverVkturnVlessBond"
+            app:summary="@string/vkturn_vless_bond_summary"
+            app:title="@string/vkturn_vless_bond" />
+
+        <Preference
+            app:icon="@drawable/ic_baseline_layers_24"
+            app:key="serverVkturnTargetProfile"
+            app:persistent="false"
+            app:summary="@string/vkturn_target_profile_summary"
+            app:title="@string/vkturn_target_profile" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/vkturn_turn_cat">
+
+        <EditTextPreference
+            app:icon="@drawable/ic_hardware_router"
+            app:key="serverVkturnTurnHost"
+            app:summary="@string/vkturn_turn_host_summary"
+            app:title="@string/vkturn_turn_host"
+            app:useSimpleSummaryProvider="true" />
+
+        <EditTextPreference
+            android:inputType="number"
+            app:icon="@drawable/ic_hardware_router"
+            app:key="serverVkturnTurnPort"
+            app:summary="@string/vkturn_turn_port_summary"
+            app:title="@string/vkturn_turn_port"
+            app:useSimpleSummaryProvider="true" />
+
+        <SwitchPreference
+            app:icon="@drawable/ic_action_dns"
+            app:key="serverVkturnUdpToTurn"
+            app:summary="@string/vkturn_udp_to_turn_summary"
+            app:title="@string/vkturn_udp_to_turn" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/vkturn_advanced_cat">
+
+        <EditTextPreference
+            android:defaultValue="4"
+            android:inputType="number"
+            app:icon="@drawable/ic_baseline_speed_24"
+            app:key="serverVkturnStreams"
+            app:summary="@string/vkturn_streams_summary"
+            app:title="@string/vkturn_streams" />
+
+        <EditTextPreference
+            android:defaultValue="10"
+            android:inputType="number"
+            app:icon="@drawable/ic_baseline_speed_24"
+            app:key="serverVkturnStreamsPerCred"
+            app:summary="@string/vkturn_streams_per_cred_summary"
+            app:title="@string/vkturn_streams_per_cred" />
+
+        <io.nekohasekai.sagernet.widget.SimpleMenuPreference
+            android:layout_height="match_parent"
+            app:defaultValue="auto"
+            app:entries="@array/vkturn_dns_mode_entry"
+            app:entryValues="@array/vkturn_dns_mode_value"
+            app:icon="@drawable/ic_action_dns"
+            app:key="serverVkturnDnsMode"
+            app:title="@string/vkturn_dns_mode"
+            app:useSimpleSummaryProvider="true" />
+
+        <EditTextPreference
+            app:icon="@drawable/ic_action_dns"
+            app:key="serverVkturnDnsServers"
+            app:summary="@string/vkturn_dns_servers_summary"
+            app:title="@string/vkturn_dns_servers"
+            app:useSimpleSummaryProvider="true" />
+
+        <SwitchPreference
+            app:icon="@drawable/ic_baseline_lock_24"
+            app:key="serverVkturnWrapEnabled"
+            app:summary="@string/vkturn_wrap_enabled_summary"
+            app:title="@string/vkturn_wrap_enabled" />
+
+        <EditTextPreference
+            app:dialogLayout="@layout/layout_password_dialog"
+            app:icon="@drawable/ic_settings_password"
+            app:key="serverVkturnWrapKeyHex"
+            app:summary="@string/vkturn_wrap_key_hex_summary"
+            app:title="@string/vkturn_wrap_key_hex" />
+
+        <SwitchPreference
+            app:icon="@drawable/ic_baseline_info_24"
+            app:key="serverVkturnManualCaptcha"
+            app:summary="@string/vkturn_manual_captcha_summary"
+            app:title="@string/vkturn_manual_captcha" />
+
+        <SwitchPreference
+            app:icon="@drawable/ic_baseline_bug_report_24"
+            app:key="serverVkturnDebug"
+            app:summary="@string/debug_log_sum"
+            app:title="@string/log_level" />
+
+    </PreferenceCategory>
+
+</PreferenceScreen>

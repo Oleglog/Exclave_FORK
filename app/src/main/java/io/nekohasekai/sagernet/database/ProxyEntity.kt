@@ -69,6 +69,8 @@ import io.nekohasekai.sagernet.fmt.tuic5.toUri
 import io.nekohasekai.sagernet.fmt.v2ray.VLESSBean
 import io.nekohasekai.sagernet.fmt.v2ray.VMessBean
 import io.nekohasekai.sagernet.fmt.v2ray.toUri
+import io.nekohasekai.sagernet.fmt.vkturn.VKTurnBean
+import io.nekohasekai.sagernet.fmt.vkturn.toUri
 import io.nekohasekai.sagernet.fmt.wireguard.WireGuardBean
 import io.nekohasekai.sagernet.ktx.app
 import io.nekohasekai.sagernet.ktx.applyDefaultValues
@@ -108,6 +110,7 @@ data class ProxyEntity(
     var shadowquicBean: ShadowQUICBean? = null,
     var trustTunnelBean: TrustTunnelBean? = null,
     var olcrtcBean: OLCRTCBean? = null,
+    var vkTurnBean: VKTurnBean? = null,
     var configBean: ConfigBean? = null,
     var chainBean: ChainBean? = null,
     var balancerBean: BalancerBean? = null
@@ -134,6 +137,7 @@ data class ProxyEntity(
         const val TYPE_SHADOWQUIC = 28
         const val TYPE_TRUSTTUNNEL = 29
         const val TYPE_OLCRTC = 30
+        const val TYPE_VKTURN = 31
         const val TYPE_CHAIN = 8
         const val TYPE_BALANCER = 14
         const val TYPE_CONFIG = 13
@@ -228,6 +232,7 @@ data class ProxyEntity(
             TYPE_SHADOWQUIC -> shadowquicBean = KryoConverters.shadowquicDeserialize(byteArray)
             TYPE_TRUSTTUNNEL -> trustTunnelBean = KryoConverters.trusttunnelDeserialize(byteArray)
             TYPE_OLCRTC -> olcrtcBean = KryoConverters.olcrtcDeserialize(byteArray)
+            TYPE_VKTURN -> vkTurnBean = KryoConverters.vkturnDeserialize(byteArray)
 
             TYPE_CONFIG -> configBean = KryoConverters.configDeserialize(byteArray)
             TYPE_CHAIN -> chainBean = KryoConverters.chainDeserialize(byteArray)
@@ -256,6 +261,7 @@ data class ProxyEntity(
         TYPE_SHADOWQUIC -> "ShadowQUIC"
         TYPE_TRUSTTUNNEL -> "TrustTunnel"
         TYPE_OLCRTC -> "olcRTC"
+        TYPE_VKTURN -> "VK TURN"
 
         TYPE_CHAIN -> chainName
         TYPE_CONFIG -> configName
@@ -288,6 +294,7 @@ data class ProxyEntity(
             TYPE_SHADOWQUIC -> shadowquicBean
             TYPE_TRUSTTUNNEL -> trustTunnelBean
             TYPE_OLCRTC -> olcrtcBean
+            TYPE_VKTURN -> vkTurnBean
 
             TYPE_CONFIG -> configBean
             TYPE_CHAIN -> chainBean
@@ -330,6 +337,7 @@ data class ProxyEntity(
             is AnyTLSBean -> toUri()
             is TrustTunnelBean -> toUri()
             is OLCRTCBean -> toUri()
+            is VKTurnBean -> toUri()
             else -> null
         }
     }
@@ -372,6 +380,7 @@ data class ProxyEntity(
             TYPE_NAIVE -> true
             TYPE_SHADOWQUIC -> true
             TYPE_OLCRTC -> true
+            TYPE_VKTURN -> true
             else -> false
         }
     }
@@ -397,6 +406,7 @@ data class ProxyEntity(
         shadowquicBean = null
         trustTunnelBean = null
         olcrtcBean = null
+        vkTurnBean = null
 
         configBean = null
         chainBean = null
@@ -483,6 +493,10 @@ data class ProxyEntity(
                 type = TYPE_OLCRTC
                 olcrtcBean = bean
             }
+            is VKTurnBean -> {
+                type = TYPE_VKTURN
+                vkTurnBean = bean
+            }
 
             is ConfigBean -> {
                 type = TYPE_CONFIG
@@ -523,6 +537,7 @@ data class ProxyEntity(
             TYPE_SHADOWQUIC -> ShadowQUICSettingsActivity::class.java
             TYPE_TRUSTTUNNEL -> TrustTunnelSettingsActivity::class.java
             TYPE_OLCRTC -> OLCRTCSettingsActivity::class.java
+            TYPE_VKTURN -> VKTurnSettingsActivity::class.java
 
             TYPE_CONFIG -> ConfigSettingsActivity::class.java
             TYPE_CHAIN -> ChainSettingsActivity::class.java

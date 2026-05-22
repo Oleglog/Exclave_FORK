@@ -399,6 +399,23 @@ object DataStore : OnPreferenceDataStoreChangeListener {
      * token; a mismatch silently drops VP8 RTP frames.
      */
     var serverOlcrtcClientId by profileCacheStore.string(Key.SERVER_OLCRTC_CLIENT_ID)
+
+    var serverVkturnVkLink by profileCacheStore.string(Key.SERVER_VKTURN_VK_LINK)
+    var serverVkturnVlessMode by profileCacheStore.boolean(Key.SERVER_VKTURN_VLESS_MODE)
+    var serverVkturnVlessBond by profileCacheStore.boolean(Key.SERVER_VKTURN_VLESS_BOND)
+    var serverVkturnStreams by profileCacheStore.stringToInt(Key.SERVER_VKTURN_STREAMS) { 4 }
+    var serverVkturnStreamsPerCred by profileCacheStore.stringToInt(Key.SERVER_VKTURN_STREAMS_PER_CRED) { 10 }
+    var serverVkturnUdpToTurn by profileCacheStore.boolean(Key.SERVER_VKTURN_UDP_TO_TURN)
+    var serverVkturnManualCaptcha by profileCacheStore.boolean(Key.SERVER_VKTURN_MANUAL_CAPTCHA)
+    var serverVkturnWrapEnabled by profileCacheStore.boolean(Key.SERVER_VKTURN_WRAP_ENABLED)
+    var serverVkturnWrapKeyHex by profileCacheStore.string(Key.SERVER_VKTURN_WRAP_KEY_HEX)
+    var serverVkturnDebug by profileCacheStore.boolean(Key.SERVER_VKTURN_DEBUG)
+    var serverVkturnDnsMode by profileCacheStore.string(Key.SERVER_VKTURN_DNS_MODE) { "auto" }
+    var serverVkturnDnsServers by profileCacheStore.string(Key.SERVER_VKTURN_DNS_SERVERS)
+    var serverVkturnTurnHost by profileCacheStore.string(Key.SERVER_VKTURN_TURN_HOST)
+    var serverVkturnTurnPort by profileCacheStore.string(Key.SERVER_VKTURN_TURN_PORT)
+    var serverVkturnTargetProfile by profileCacheStore.long(Key.SERVER_VKTURN_TARGET_PROFILE)
+
     var serverSingUot by profileCacheStore.boolean(Key.SERVER_SING_UOT)
     var serverSingMux by profileCacheStore.boolean(Key.SERVER_SING_MUX)
     var serverSingMuxProtocol by profileCacheStore.string(Key.SERVER_SING_MUX_PROTOCOL)

@@ -154,3 +154,9 @@ class SagerDatabase_Migration_31_32 : AutoMigrationSpec
     )
 )
 class SagerDatabase_Migration_33_34 : AutoMigrationSpec
+
+object SagerDatabase_Migration_36_37 : Migration(36, 37) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("""ALTER TABLE `proxy_entities` ADD `vkTurnBean` BLOB DEFAULT NULL""")
+    }
+}

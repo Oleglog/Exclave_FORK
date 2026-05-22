@@ -37,6 +37,7 @@ import io.nekohasekai.sagernet.fmt.olcrtc.parseOLCRTC
 import io.nekohasekai.sagernet.fmt.trusttunnel.parseTrustTunnel
 import io.nekohasekai.sagernet.fmt.tuic5.parseTuic
 import io.nekohasekai.sagernet.fmt.v2ray.parseV2Ray
+import io.nekohasekai.sagernet.fmt.vkturn.parseVKTurn
 import io.nekohasekai.sagernet.fmt.wireguard.parseWireGuard
 import java.io.ByteArrayOutputStream
 import java.util.zip.Deflater
@@ -141,6 +142,10 @@ fun parseShareLinks(text: String): List<AbstractBean> {
         } else if (startsWith("olcrtc://", ignoreCase = true)) {
             runCatching {
                 entities.add(parseOLCRTC(this))
+            }
+        } else if (startsWith("vkturn://", ignoreCase = true)) {
+            runCatching {
+                entities.add(parseVKTurn(this))
             }
         }
     }

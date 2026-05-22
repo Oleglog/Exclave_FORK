@@ -157,6 +157,7 @@
                 <data android:scheme="anytls" />
                 <data android:scheme="tt" />
                 <data android:scheme="olcrtc" />
+                <data android:scheme="vkturn" />
             </intent-filter>
 
             <intent-filter>
@@ -216,6 +217,8 @@
             android:name="io.nekohasekai.sagernet.ui.profile.TrustTunnelSettingsActivity" />
         <activity
             android:name="io.nekohasekai.sagernet.ui.profile.OLCRTCSettingsActivity" />
+        <activity
+            android:name="io.nekohasekai.sagernet.ui.profile.VKTurnSettingsActivity" />
         <activity
             android:name="io.nekohasekai.sagernet.ui.profile.ConfigSettingsActivity" />
         <activity
