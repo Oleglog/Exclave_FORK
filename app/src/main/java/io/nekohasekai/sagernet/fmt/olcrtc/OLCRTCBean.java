@@ -37,6 +37,7 @@ public class OLCRTCBean extends AbstractBean {
 
     public static final String TRANSPORT_DATACHANNEL = "datachannel";
     public static final String TRANSPORT_VP8CHANNEL = "vp8channel";
+    public static final String TRANSPORT_SEICHANNEL = "seichannel";
     public static final String TRANSPORT_VIDEOCHANNEL = "videochannel";
 
     public String provider;
