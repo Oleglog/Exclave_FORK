@@ -1435,7 +1435,6 @@ func Start(ctx context.Context, opts Options) error {
 	if err != nil {
 		return fmt.Errorf("listen local UDP: %w", err)
 	}
-	signalReady(opts.Ready)
 	context.AfterFunc(ctx, func() { _ = listenConn.Close() })
 	if opts.NoDTLS {
 		return fmt.Errorf("direct mode is not supported with dispatcher")
@@ -1493,7 +1492,9 @@ func Start(ctx context.Context, opts Options) error {
 	}()
 	select {
 	case <-okchan:
+		signalReady(opts.Ready)
 	case <-ctx.Done():
+		return ctx.Err()
 	}
 	for i := 1; i < numStreams; i++ {
 		cchan := make(chan net.PacketConn)

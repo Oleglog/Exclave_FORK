@@ -34,6 +34,7 @@ class VKTurnExternalInstance(
         private const val CAPTCHA_NOTIFICATION_ID = 7301
         private val CAPTCHA_URL_REGEX = Pattern.compile(
             """(?:manually open this URL|Open this URL in your browser):\s*(https?://\S+)""",
+            Pattern.CASE_INSENSITIVE,
         )
     }
 
@@ -136,7 +137,7 @@ class VKTurnExternalInstance(
             bean.dnsMode.ifEmpty { "auto" },
             bean.dnsServers.orEmpty(),
         )
-        VKTurnMobileBridge.waitReady(45_000L)
+        VKTurnMobileBridge.waitReady(300_000L)
     }
 
     override fun launch() {
