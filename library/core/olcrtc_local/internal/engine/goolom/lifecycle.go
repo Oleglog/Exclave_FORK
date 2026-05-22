@@ -112,10 +112,7 @@ func (s *Session) setupPeerConnections(config webrtc.Configuration) error {
 }
 
 func (s *Session) dialWebSocket() error {
-	wsDialer := websocket.Dialer{
-		NetDialContext:   protect.DialContext,
-		HandshakeTimeout: wsHandshakeTimeout,
-	}
+	wsDialer := protect.NewWebSocketDialer(wsHandshakeTimeout)
 	ws, resp, err := wsDialer.Dial(s.mediaServerURL, nil)
 	if err != nil {
 		return fmt.Errorf("dial ws: %w", err)
@@ -197,8 +194,13 @@ func (s *Session) Close() error {
 	if !alreadyClosing {
 		leaveUID := uuid.New().String()
 		leaveAck := s.registerAckWaiter(leaveUID)
+		// 2s matches our jitsi tear-down budget. The reason is the same:
+		// without giving the server time to register the leave, a
+		// back-to-back reconnection from the same client collides with a
+		// still-alive ghost participant on the SFU side and inherits
+		// stale media-flow state.
 		if s.sendLeave(leaveUID) {
-			_ = s.waitForAck(leaveUID, leaveAck, 1500*time.Millisecond)
+			_ = s.waitForAck(leaveUID, leaveAck, 2*time.Second)
 		} else {
 			s.removeAckWaiter(leaveUID)
 		}
@@ -389,6 +391,19 @@ func (s *Session) queueReconnect() {
 	case s.reconnectCh <- struct{}{}:
 	default:
 	}
+}
+
+// Reconnect asks the goolom session to tear down its peer connections and
+// rejoin the room. Triggered by upper layers when they detect liveness loss
+// before the underlying PC has reported failure (silent black-hole on the
+// data path).
+func (s *Session) Reconnect(reason string) {
+	if s.closed.Load() {
+		return
+	}
+	logger.Infof("goolom reconnect requested: %s", reason)
+	s.stopSession()
+	s.queueReconnect()
 }
 
 func (s *Session) stopSession() {
