@@ -50,7 +50,7 @@ func (s *Session) Connect(ctx context.Context) error {
 		select {
 		case <-dcReady:
 			return nil
-		case <-time.After(60 * time.Second):
+		case <-time.After(15 * time.Second):
 			return ErrDataChannelTimeout
 		case <-ctx.Done():
 			return fmt.Errorf("connect context cancelled: %w", ctx.Err())
