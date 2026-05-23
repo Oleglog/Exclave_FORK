@@ -98,7 +98,7 @@ type Crypto struct {
 
 // Net groups network and transport selection.
 type Net struct {
-	Transport string `yaml:"transport"` // vp8channel (recommended), datachannel, videochannel, seichannel
+	Transport string `yaml:"transport"` // datachannel, vp8channel, videochannel, seichannel
 	DNS       string `yaml:"dns"`
 }
 

@@ -90,7 +90,7 @@ class OLCRTCExternalInstance(
             "wb_stream" -> "wbstream"
             else -> bean.provider.ifBlank { OLCRTCBean.PROVIDER_TELEMOST }
         }
-        val transport = bean.transport.ifBlank { OLCRTCBean.TRANSPORT_VP8CHANNEL }
+        val transport = bean.transport.ifBlank { OLCRTCBean.TRANSPORT_DATACHANNEL }
 
         // clientID MUST come from the URI/QR (server admin panel issues it via
         // the `client_id=` query parameter — see requirements-server.md S8).
