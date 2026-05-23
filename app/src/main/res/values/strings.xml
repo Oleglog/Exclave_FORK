@@ -326,6 +326,8 @@
     <string name="vkturn_captcha_channel">VK TURN captcha</string>
     <string name="vkturn_captcha_title">VK TURN captcha required</string>
     <string name="vkturn_captcha_text">Tap to open the captcha page. The URL was also copied to clipboard.</string>
+    <string name="vkturn_captcha_open_browser">Open in browser</string>
+    <string name="vkturn_captcha_copy_link">Copy link</string>
     <string name="ss_cat">Shadowsocks settings</string>
     <string name="unsaved_changes_prompt">Changes are not saved. Do you want to save?</string>
     <string name="apply">Apply</string>

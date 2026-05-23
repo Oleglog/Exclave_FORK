@@ -52,6 +52,7 @@ Write-Host "Updating vk-turn-proxy from upstream..."
 $vkAdapter = Join-Path $adapterRoot "vk-turn-proxy"
 $adapterFiles = @(
     "client\main.go",
+    "client\hooks.go",
     "client\wrap.go",
     "client\manual_captcha.go",
     "client\ish_listener_other.go",

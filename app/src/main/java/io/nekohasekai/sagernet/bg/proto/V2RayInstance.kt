@@ -64,6 +64,10 @@ abstract class V2RayInstance(
         return ::config.isInitialized
     }
 
+    fun hasVKTurnExternalInstances(): Boolean {
+        return externalInstances.values.any { it is VKTurnExternalInstance }
+    }
+
     protected fun initPlugin(name: String): PluginManager.InitResult {
         return pluginPath.getOrPut(name) { PluginManager.init(name)!! }
     }
@@ -130,7 +134,7 @@ abstract class V2RayInstance(
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    override fun launch() {
+    fun launchExternalInstances() {
         val context = SagerNet.application
         for ((_, chain) in config.index) {
             chain.entries.forEachIndexed { _, (triple, profile) ->
@@ -201,6 +205,11 @@ abstract class V2RayInstance(
                 }
             }
         }
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    open fun launchCore() {
+        val context = SagerNet.application
         v2rayPoint.start()
         if (config.requireWs) {
             val url = "http://" + joinHostPort(LOCALHOST, config.wsPort) + "/"
@@ -254,6 +263,12 @@ abstract class V2RayInstance(
                 shForwarder.loadUrl(url)
             }
         }
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    override fun launch() {
+        launchExternalInstances()
+        launchCore()
     }
 
     private var isClosed = false

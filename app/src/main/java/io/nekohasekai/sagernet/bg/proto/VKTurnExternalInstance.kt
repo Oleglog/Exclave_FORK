@@ -13,6 +13,7 @@ import io.nekohasekai.sagernet.SagerNet
 import io.nekohasekai.sagernet.bg.AbstractInstance
 import io.nekohasekai.sagernet.fmt.vkturn.VKTurnBean
 import io.nekohasekai.sagernet.ktx.Logs
+import io.nekohasekai.sagernet.ui.VKTurnCaptchaActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -36,6 +37,7 @@ class VKTurnExternalInstance(
             """(?:manually open this URL|Open this URL in your browser):\s*(https?://\S+)""",
             Pattern.CASE_INSENSITIVE,
         )
+        private val URL_REGEX = Pattern.compile("""https?://\S+""")
     }
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -56,9 +58,26 @@ class VKTurnExternalInstance(
                 Logs.d("[vkturn] $line")
                 val captcha = CAPTCHA_URL_REGEX.matcher(line)
                 if (captcha.find()) {
-                    openCaptcha(captcha.group(1))
+                    openCaptcha(cleanCaptchaUrl(captcha.group(1)))
+                } else if (line.contains("captcha", ignoreCase = true)) {
+                    val url = URL_REGEX.matcher(line)
+                    if (url.find()) openCaptcha(cleanCaptchaUrl(url.group()))
                 }
             }
+        }
+        VKTurnMobileBridge.setCaptchaListener { url ->
+            openCaptcha(cleanCaptchaUrl(url))
+        }
+    }
+
+    private fun cleanCaptchaUrl(url: String?): String? {
+        return url?.trim()?.trimEnd('.', ',', ';', ')', ']')
+    }
+
+    private fun captchaIntent(url: String): Intent {
+        return Intent(SagerNet.application, VKTurnCaptchaActivity::class.java).apply {
+            putExtra(VKTurnCaptchaActivity.EXTRA_URL, url)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         }
     }
 
@@ -73,24 +92,27 @@ class VKTurnExternalInstance(
         }
         showCaptchaNotification(url)
         runCatching {
-            SagerNet.application.startActivity(
-                Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                },
-            )
+            SagerNet.application.startActivity(captchaIntent(url))
         }.onFailure {
-            Logs.w("[vkturn] failed to open captcha URL: ${it.message}")
+            Logs.w("[vkturn] failed to open captcha WebView: ${it.message}")
+            runCatching {
+                SagerNet.application.startActivity(
+                    Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    },
+                )
+            }.onFailure { browserError ->
+                Logs.w("[vkturn] failed to open captcha URL: ${browserError.message}")
+            }
         }
     }
 
     private fun showCaptchaNotification(url: String) {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
+        val intent = captchaIntent(url)
         val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         } else {
-            0
+            PendingIntent.FLAG_UPDATE_CURRENT
         }
         val pendingIntent = PendingIntent.getActivity(
             SagerNet.application,
@@ -137,7 +159,9 @@ class VKTurnExternalInstance(
             bean.dnsMode.ifEmpty { "auto" },
             bean.dnsServers.orEmpty(),
         )
+        Logs.d("[vkturn] waiting for TURN transport readiness")
         VKTurnMobileBridge.waitReady(300_000L)
+        Logs.d("[vkturn] TURN transport is ready")
     }
 
     override fun launch() {
@@ -189,6 +213,10 @@ private object VKTurnMobileBridge {
         Class.forName("vkturnmobile.LogWriter")
     }
 
+    private val captchaListenerClass: Class<*>? by lazy {
+        runCatching { Class.forName("vkturnmobile.CaptchaListener") }.getOrNull()
+    }
+
     fun setLogWriter(writer: (String?) -> Unit) {
         val proxy = Proxy.newProxyInstance(
             logWriterClass.classLoader,
@@ -200,6 +228,24 @@ private object VKTurnMobileBridge {
             null
         }
         clazz.getMethod("setLogWriter", logWriterClass).invoke(null, proxy)
+    }
+
+    fun setCaptchaListener(listener: (String?) -> Unit) {
+        val listenerClass = captchaListenerClass ?: return
+        val proxy = Proxy.newProxyInstance(
+            listenerClass.classLoader,
+            arrayOf(listenerClass),
+        ) { _, method, args ->
+            if (method.name == "showCaptcha") {
+                listener(args?.getOrNull(0) as? String)
+            }
+            null
+        }
+        runCatching {
+            clazz.getMethod("setCaptchaListener", listenerClass).invoke(null, proxy)
+        }.onFailure {
+            Logs.w("[vkturn] captcha listener is unavailable: ${it.message}")
+        }
     }
 
     fun start(

@@ -108,8 +108,17 @@ class VpnService : BaseVpnService(),
     private var networkListenerIsRunning = false
 
     override suspend fun startProcesses() {
-        startVpn()
-        super.startProcesses()
+        val proxy = data.proxy!!
+        if (proxy.hasVKTurnExternalInstances()) {
+            Logs.d("[vkturn] waiting for external transport before VPN interface")
+            proxy.launchExternalInstances()
+            Logs.d("[vkturn] external transport is ready, starting VPN interface")
+            startVpn()
+            proxy.launchCore()
+        } else {
+            startVpn()
+            proxy.launch()
+        }
     }
 
     override var wakeLock: PowerManager.WakeLock? = null

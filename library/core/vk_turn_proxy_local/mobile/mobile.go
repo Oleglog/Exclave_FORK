@@ -14,13 +14,18 @@ type LogWriter interface {
 	WriteLog(msg string)
 }
 
+type CaptchaListener interface {
+	ShowCaptcha(url string)
+}
+
 var (
-	mu        sync.Mutex
-	cancel    context.CancelFunc
-	done      chan struct{}
-	ready     chan struct{}
-	lastErr   error
-	logWriter LogWriter
+	mu              sync.Mutex
+	cancel          context.CancelFunc
+	done            chan struct{}
+	ready           chan struct{}
+	lastErr         error
+	logWriter       LogWriter
+	captchaListener CaptchaListener
 )
 
 type mobileLogWriter struct{}
@@ -43,6 +48,12 @@ func init() {
 func SetLogWriter(writer LogWriter) {
 	mu.Lock()
 	logWriter = writer
+	mu.Unlock()
+}
+
+func SetCaptchaListener(listener CaptchaListener) {
+	mu.Lock()
+	captchaListener = listener
 	mu.Unlock()
 }
 
@@ -76,6 +87,15 @@ func Start(
 	d := done
 	r := ready
 	mu.Unlock()
+
+	vkturnclient.SetCaptchaURLHandler(func(url string) {
+		mu.Lock()
+		listener := captchaListener
+		mu.Unlock()
+		if listener != nil {
+			listener.ShowCaptcha(url)
+		}
+	})
 
 	opts := vkturnclient.Options{
 		TurnHost:       turnHost,
@@ -144,6 +164,7 @@ func Stop() {
 	done = nil
 	ready = nil
 	lastErr = nil
+	vkturnclient.SetCaptchaURLHandler(nil)
 	mu.Unlock()
 	if c != nil {
 		c()

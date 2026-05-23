@@ -220,6 +220,10 @@
         <activity
             android:name="io.nekohasekai.sagernet.ui.profile.VKTurnSettingsActivity" />
         <activity
+            android:name="io.nekohasekai.sagernet.ui.VKTurnCaptchaActivity"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask" />
+        <activity
             android:name="io.nekohasekai.sagernet.ui.profile.ConfigSettingsActivity" />
         <activity
             android:name="io.nekohasekai.sagernet.ui.profile.ConfigEditActivity" />

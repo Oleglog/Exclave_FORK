@@ -55,9 +55,8 @@ class ProxyInstance(profile: ProxyEntity, val service: BaseService.Interface) : 
         }
     }
 
-    override fun launch() {
-        super.launch()
-
+    override fun launchCore() {
+        super.launchCore()
         if (config.observerTag.isNotEmpty()) {
             v2rayPoint.setStatusUpdateListener(config.observerTag, this)
             observatoryJob = runOnDefaultDispatcher {
@@ -66,6 +65,10 @@ class ProxyInstance(profile: ProxyEntity, val service: BaseService.Interface) : 
         }
 
         SagerNet.started = true
+    }
+
+    override fun launch() {
+        super.launch()
     }
 
     fun sendInitStatuses() {
