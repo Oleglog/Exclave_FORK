@@ -35,6 +35,7 @@ import io.nekohasekai.sagernet.fmt.olcrtc.OLCRTCBean
 import io.nekohasekai.sagernet.fmt.olcrtc.toUri
 import io.nekohasekai.sagernet.ktx.showAllowingStateLoss
 import io.nekohasekai.sagernet.widget.QRCodeDialog
+import io.nekohasekai.sagernet.widget.SimpleMenuPreference
 
 class OLCRTCSettingsActivity : ProfileSettingsActivity<OLCRTCBean>() {
 
@@ -143,6 +144,38 @@ class OLCRTCSettingsActivity : ProfileSettingsActivity<OLCRTCBean>() {
 
         fun applyProviderVisibility(provider: String) {
             roomPasswordPref?.isVisible = provider == OLCRTCBean.PROVIDER_JITSI
+            val tp = transportPref as? SimpleMenuPreference ?: return
+            when (provider) {
+                OLCRTCBean.PROVIDER_TELEMOST -> {
+                    tp.entries = arrayOf(
+                        getString(R.string.olcrtc_transport_vp8channel),
+                        getString(R.string.olcrtc_transport_seichannel),
+                        getString(R.string.olcrtc_transport_videochannel),
+                    )
+                    tp.entryValues = arrayOf(
+                        OLCRTCBean.TRANSPORT_VP8CHANNEL,
+                        OLCRTCBean.TRANSPORT_SEICHANNEL,
+                        OLCRTCBean.TRANSPORT_VIDEOCHANNEL,
+                    )
+                    if (tp.value == OLCRTCBean.TRANSPORT_DATACHANNEL) {
+                        tp.value = OLCRTCBean.TRANSPORT_VP8CHANNEL
+                    }
+                }
+                else -> {
+                    tp.entries = arrayOf(
+                        getString(R.string.olcrtc_transport_datachannel),
+                        getString(R.string.olcrtc_transport_vp8channel),
+                        getString(R.string.olcrtc_transport_seichannel),
+                        getString(R.string.olcrtc_transport_videochannel),
+                    )
+                    tp.entryValues = arrayOf(
+                        OLCRTCBean.TRANSPORT_DATACHANNEL,
+                        OLCRTCBean.TRANSPORT_VP8CHANNEL,
+                        OLCRTCBean.TRANSPORT_SEICHANNEL,
+                        OLCRTCBean.TRANSPORT_VIDEOCHANNEL,
+                    )
+                }
+            }
         }
 
         fun applyTransportSummary(transport: String) {
@@ -156,15 +189,16 @@ class OLCRTCSettingsActivity : ProfileSettingsActivity<OLCRTCBean>() {
             DataStore.serverOlcrtcProvider.ifEmpty { OLCRTCBean.PROVIDER_TELEMOST },
         )
         applyTransportSummary(
-            DataStore.serverOlcrtcTransport.ifEmpty { OLCRTCBean.TRANSPORT_DATACHANNEL },
+            DataStore.serverOlcrtcTransport.ifEmpty { OLCRTCBean.TRANSPORT_VP8CHANNEL },
         )
 
         providerPref?.setOnPreferenceChangeListener { _, newValue ->
-            applyProviderVisibility((newValue as? String) ?: OLCRTCBean.PROVIDER_TELEMOST)
+            val provider = (newValue as? String) ?: OLCRTCBean.PROVIDER_TELEMOST
+            applyProviderVisibility(provider)
             true
         }
         transportPref?.setOnPreferenceChangeListener { _, newValue ->
-            applyTransportSummary((newValue as? String) ?: OLCRTCBean.TRANSPORT_DATACHANNEL)
+            applyTransportSummary((newValue as? String) ?: OLCRTCBean.TRANSPORT_VP8CHANNEL)
             true
         }
 

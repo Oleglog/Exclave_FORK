@@ -57,7 +57,7 @@ public class OLCRTCBean extends AbstractBean {
         if (serverPort == null || serverPort == 0) serverPort = 1;
         super.initializeDefaultValues();
         if (provider == null || provider.isEmpty()) provider = PROVIDER_JITSI;
-        if (transport == null || transport.isEmpty()) transport = TRANSPORT_DATACHANNEL;
+        if (transport == null || transport.isEmpty()) transport = TRANSPORT_VP8CHANNEL;
         if (roomId == null) roomId = "";
         if (roomPassword == null) roomPassword = "";
         if (clientId == null) clientId = "";
