@@ -32,9 +32,8 @@ import io.nekohasekai.sagernet.fmt.KryoConverters;
 public class OLCRTCBean extends AbstractBean {
 
     public static final String PROVIDER_TELEMOST = "telemost";
-    public static final String PROVIDER_JAZZ = "jazz";
-    public static final String PROVIDER_WB_STREAM = "wbstream";
     public static final String PROVIDER_JITSI = "jitsi";
+    public static final String PROVIDER_WB_STREAM = "wbstream";
 
     public static final String TRANSPORT_DATACHANNEL = "datachannel";
     public static final String TRANSPORT_VP8CHANNEL = "vp8channel";
@@ -57,7 +56,7 @@ public class OLCRTCBean extends AbstractBean {
         if (serverAddress == null || serverAddress.isEmpty()) serverAddress = "olcrtc";
         if (serverPort == null || serverPort == 0) serverPort = 1;
         super.initializeDefaultValues();
-        if (provider == null || provider.isEmpty()) provider = PROVIDER_JAZZ;
+        if (provider == null || provider.isEmpty()) provider = PROVIDER_JITSI;
         if (transport == null || transport.isEmpty()) transport = TRANSPORT_DATACHANNEL;
         if (roomId == null) roomId = "";
         if (roomPassword == null) roomPassword = "";

@@ -33,7 +33,7 @@ olcrtc://<Auth>?<Transport><key=value&key=value>@<RoomID>#<EncryptionKey>$<MIMO>
 
 | Поле | Значение |
 |------|----------|
-| `<Auth>` | Имя auth-провайдера, например `telemost`, `jazz`, `wbstream` |
+| `<Auth>` | Имя auth-провайдера, например `telemost`, `wbstream`, `jitsi` |
 | `<Transport>` | Имя транспорта, например `datachannel`, `vp8channel`, `seichannel`, `videochannel` |
 | payload | Параметры транспорта в `<key=value&...>`. Ключи совпадают с YAML полями. Блок опускается если используются defaults |
 | `<RoomID>` | Идентификатор комнаты или auth-specific room URL/ID |
@@ -92,7 +92,7 @@ Payload не используется.
 | `<EncryptionKey>` | `crypto.key` |
 | `<MIMO>` | В `olcrtc` не передаётся. Это только клиентский комментарий |
 
-`link: direct` и `data: data` в этом формате не кодируются, потому что для текущих сценариев они фиксированные.
+`data: data` в этом формате не кодируется, потому что это локальная runtime-настройка конкретного запуска.
 
 ---
 
@@ -113,19 +113,18 @@ Payload не используется.
 
 ## Примеры
 
-### wbstream + datachannel (только с permission rights)
+### wbstream + datachannel (не работает в обычном guest flow)
 
 ```text
 olcrtc://wbstream?datachannel@room-01#d823fa01cb3e0609b67322f7cf984c4ee2e4ce2e294936fc24ef38c9e59f4799$RU / olc free sub / IPv6
 ```
 
-Payload не нужен - datachannel параметров не имеет. Для WBStream этот режим не рекомендуется в обычном guest flow: участникам нужны права на отправку data packets (`canPublishData=true`), обычно через модераторские/permission права комнаты.
+Payload не нужен - datachannel параметров не имеет. Для WBStream этот режим **не работает** в обычном guest flow: WB Stream выдаёт токены с `canPublishData=false`, и DC не маршрутизирует данные.
 
 ### Эквивалент YAML
 
 ```yaml
 mode: cnc
-link: direct
 auth:
   provider: wbstream
 room:
@@ -147,7 +146,6 @@ olcrtc://wbstream?vp8channel<vp8-fps=60&vp8-batch=64>@room-01#d823fa01cb3e0609b6
 
 ```yaml
 mode: cnc
-link: direct
 auth:
   provider: wbstream
 room:
@@ -162,19 +160,18 @@ vp8:
 data: data
 ```
 
-### jazz + seichannel
+### wbstream + seichannel
 
 ```text
-olcrtc://jazz?seichannel<fps=60&batch=64&frag=900&ack-ms=2000>@room-01#d823fa01cb3e0609b67322f7cf984c4ee2e4ce2e294936fc24ef38c9e59f4799$DE / olc free sub
+olcrtc://wbstream?seichannel<fps=60&batch=64&frag=900&ack-ms=2000>@room-01#d823fa01cb3e0609b67322f7cf984c4ee2e4ce2e294936fc24ef38c9e59f4799$DE / olc free sub
 ```
 
 ### Эквивалент YAML
 
 ```yaml
 mode: cnc
-link: direct
 auth:
-  provider: jazz
+  provider: wbstream
 room:
   id: "room-01"
 crypto:
@@ -199,7 +196,6 @@ olcrtc://telemost?videochannel<video-w=1080&video-h=1080&video-fps=60&video-bitr
 
 ```yaml
 mode: cnc
-link: direct
 auth:
   provider: telemost
 room:
@@ -215,6 +211,31 @@ video:
   bitrate: "5000k"
   hw: none
   codec: qrcode
+data: data
+```
+
+---
+
+### jitsi + datachannel
+
+```text
+olcrtc://jitsi?datachannel@https://meet.cryptopro.ru/myroom#d823fa01cb3e0609b67322f7cf984c4ee2e4ce2e294936fc24ef38c9e59f4799$RU / olc free sub
+```
+
+`<RoomID>` для jitsi — полный URL комнаты в формате `https://host/room` (или `host/room`). Поддерживается любой self-hosted Jitsi Meet инстанс без аутентификации; для публичных серверов вроде `meet.jit.si` тот же формат.
+
+### Эквивалент YAML
+
+```yaml
+mode: cnc
+auth:
+  provider: jitsi
+room:
+  id: "https://meet.cryptopro.ru/myroom"
+crypto:
+  key: "d823fa01cb3e0609b67322f7cf984c4ee2e4ce2e294936fc24ef38c9e59f4799"
+net:
+  transport: datachannel
 data: data
 ```
 

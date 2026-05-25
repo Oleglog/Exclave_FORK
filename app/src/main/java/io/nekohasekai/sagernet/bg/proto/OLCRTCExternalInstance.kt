@@ -106,18 +106,12 @@ class OLCRTCExternalInstance(
             )
         }
 
-        // SaluteJazz auth requires the room URL in the form "<roomId>:<password>".
-        // For the other carriers we forward the bare roomId as before.
+        // Jitsi auth can carry an optional room password.
         val roomPassword = bean.roomPassword.orEmpty()
-        val effectiveRoomId = if (carrier == OLCRTCBean.PROVIDER_JAZZ && roomPassword.isNotEmpty()) {
-            "${bean.roomId}:$roomPassword"
-        } else {
-            bean.roomId
-        }
+        val effectiveRoomId = bean.roomId
 
         Mobile.setTransport(transport)
-        Mobile.setLink("direct")
-        Mobile.setDNS(bean.dnsServer.ifEmpty { "77.88.8.8:53" })
+        Mobile.setDNS(bean.dnsServer.ifEmpty { "8.8.8.8:53" })
 
         if (transport == OLCRTCBean.TRANSPORT_VP8CHANNEL) {
             Mobile.setVP8Options(
@@ -125,10 +119,7 @@ class OLCRTCExternalInstance(
                 bean.vp8BatchSize.toLong(),
             )
         }
-        // SEI defaults (FPS / batch / fragment / ack timeout) are baked into
-        // the Go-side mobileConfig (30/8/900/1500). We don't expose them in
-        // the Kotlin UI yet, so no setSEIOptions call is needed here; the
-        // Go layer will apply the defaults when transport == "seichannel".
+        Mobile.setLivenessOptions(10_000, 5_000, 3)
 
         Mobile.startWithTransport(
             carrier,

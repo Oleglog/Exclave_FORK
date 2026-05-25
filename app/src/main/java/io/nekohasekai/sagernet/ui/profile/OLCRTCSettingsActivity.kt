@@ -35,6 +35,7 @@ import io.nekohasekai.sagernet.fmt.olcrtc.OLCRTCBean
 import io.nekohasekai.sagernet.fmt.olcrtc.toUri
 import io.nekohasekai.sagernet.ktx.showAllowingStateLoss
 import io.nekohasekai.sagernet.widget.QRCodeDialog
+import io.nekohasekai.sagernet.widget.SimpleMenuPreference
 
 class OLCRTCSettingsActivity : ProfileSettingsActivity<OLCRTCBean>() {
 
@@ -66,7 +67,7 @@ class OLCRTCSettingsActivity : ProfileSettingsActivity<OLCRTCBean>() {
         roomId = DataStore.serverOlcrtcRoomId
         // Password only persists for SaluteJazz; clear it for the other carriers
         // so a user who switches provider does not silently leave a stale value.
-        roomPassword = if (provider == OLCRTCBean.PROVIDER_JAZZ) {
+        roomPassword = if (provider == OLCRTCBean.PROVIDER_JITSI) {
             DataStore.serverOlcrtcRoomPassword.orEmpty()
         } else {
             ""
@@ -142,7 +143,7 @@ class OLCRTCSettingsActivity : ProfileSettingsActivity<OLCRTCBean>() {
         val transportPref = findPreference<Preference>(Key.SERVER_OLCRTC_TRANSPORT)
 
         fun applyProviderVisibility(provider: String) {
-            roomPasswordPref?.isVisible = provider == OLCRTCBean.PROVIDER_JAZZ
+            roomPasswordPref?.isVisible = provider == OLCRTCBean.PROVIDER_JITSI
         }
 
         fun applyTransportSummary(transport: String) {

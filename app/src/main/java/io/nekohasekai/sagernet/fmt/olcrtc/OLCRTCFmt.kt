@@ -6,7 +6,7 @@ import org.json.JSONObject
 
 private val VALID_PROVIDERS = setOf(
     OLCRTCBean.PROVIDER_TELEMOST,
-    OLCRTCBean.PROVIDER_JAZZ,
+    OLCRTCBean.PROVIDER_JITSI,
     OLCRTCBean.PROVIDER_WB_STREAM,
     OLCRTCBean.PROVIDER_JITSI,
     "wb_stream",
@@ -53,8 +53,8 @@ fun OLCRTCBean.toUri(): String {
         username = provider
         path = "/$roomId"
         addQueryParameter("key", keyHex)
-        // Room password is salutejazz-only; never leak it for other carriers.
-        if (provider == OLCRTCBean.PROVIDER_JAZZ &&
+        // Room password is jitsi-only; never leak it for other carriers.
+        if (provider == OLCRTCBean.PROVIDER_JITSI &&
             !roomPassword.isNullOrEmpty()
         ) {
             addQueryParameter("room_password", roomPassword)

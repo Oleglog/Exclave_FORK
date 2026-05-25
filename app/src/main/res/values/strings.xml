@@ -265,11 +265,11 @@
     <string name="olcrtc_connection_cat">Connection</string>
     <string name="olcrtc_advanced_cat">Advanced</string>
     <string name="olcrtc_provider">Provider</string>
-    <string name="olcrtc_provider_summary">Server-side carrier handling the WebRTC handshake (Telemost / SaluteJazz / WB Stream).</string>
+    <string name="olcrtc_provider_summary">Server-side carrier handling the WebRTC handshake (Telemost / Jitsi / WB Stream).</string>
     <string name="olcrtc_room_id">Room ID</string>
     <string name="olcrtc_room_id_summary">Numeric room ID issued by your olcRTC server admin (the path part of e.g. https://telemost.yandex.ru/j/&lt;ID&gt;).</string>
     <string name="olcrtc_room_password">Room password</string>
-    <string name="olcrtc_room_password_summary">Password for the SaluteJazz room. Required when the server enforces a room password (sent to auth/salutejazz as &lt;roomID&gt;:&lt;password&gt;).</string>
+    <string name="olcrtc_room_password_summary">Password for the Jitsi room. Required when the server enforces a room password (sent to auth/jitsi as &lt;roomID&gt;:&lt;password&gt;).</string>
     <string name="olcrtc_key_hex">Pre-shared key (hex)</string>
     <string name="olcrtc_key_hex_summary">64-character hexadecimal pre-shared key issued by the olcRTC server.</string>
     <string name="olcrtc_transport">Transport</string>

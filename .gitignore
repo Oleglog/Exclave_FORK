@@ -18,3 +18,5 @@ jniLibs/
 go.work
 go.work.sum
 /temp-files/
+artifacts/
+release_artifacts/

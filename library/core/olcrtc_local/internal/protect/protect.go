@@ -3,34 +3,45 @@ package protect
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
-// Protector is called with a socket file descriptor before connect.
-// On Android, this calls VpnService.protect(fd) to bypass VPN routing.
-var Protector func(fd int) bool //nolint:gochecknoglobals // package-level state intentional
+const (
+	defaultDialTimeout       = 10 * time.Second
+	defaultKeepAlive         = 30 * time.Second
+	defaultIdleConnTimeout   = 30 * time.Second
+	defaultTLSHandshake      = 10 * time.Second
+	defaultResponseHeader    = 10 * time.Second
+	defaultWebSocketTimeout  = 10 * time.Second
+	defaultHTTPClientTimeout = 30 * time.Second
+	defaultStatusBodyLimit   = 1024
+	perServerDNSTimeout      = 3 * time.Second
+)
 
 // HTTPDNSServer is the IPv4 DNS resolver used for plain HTTP/HTTPS dials
 // from auth providers. The Android client cannot rely on the system
 // resolver because, while the VpnService is up, system DNS lookups go
-// through the TUN interface and races with the very session the
-// HTTP call is trying to set up. Empty string falls back to the system
-// resolver (used in tests).
+// through the TUN interface and race with the very session the HTTP call
+// is trying to set up. Empty string falls back to the system resolver.
 var HTTPDNSServer = "77.88.8.8:53" //nolint:gochecknoglobals // package-level state intentional
 
 // DNSFallbackServers is the static list of well-known public resolvers
 // raced in parallel with the user-configured server. Carriers that
 // blackhole one of them (a common situation on Russian mobile data)
-// will still succeed via a sibling endpoint. All servers are tried
-// over both UDP/53 and TCP/53 simultaneously.
+// will still succeed via a sibling endpoint.
 var DNSFallbackServers = []string{ //nolint:gochecknoglobals // package-level state intentional
 	"1.1.1.1:53",
 	"1.0.0.1:53",
@@ -41,14 +52,17 @@ var DNSFallbackServers = []string{ //nolint:gochecknoglobals // package-level st
 	"9.9.9.9:53",
 }
 
-// dialTimeout / keepAlive / perServerDNSTimeout are kept conservative so
-// a stalled hop in the auth path surfaces quickly instead of starving
-// the whole startup.
-const (
-	dialTimeout         = 10 * time.Second
-	keepAlive           = 30 * time.Second
-	perServerDNSTimeout = 3 * time.Second
+var (
+	sensitiveFieldRE = regexp.MustCompile(
+		`(?i)((?:access[_-]?token|room[_-]?token|token|credentials)"?\s*[:=]\s*"?)` +
+			`[^",\s}]+`,
+	)
+	sensitiveBearerRE = regexp.MustCompile(`(?i)(bearer\s+)[A-Za-z0-9._~+/=-]+`)
 )
+
+// Protector is called with a socket file descriptor before connect.
+// On Android, this calls VpnService.protect(fd) to bypass VPN routing.
+var Protector func(fd int) bool //nolint:gochecknoglobals // package-level state intentional
 
 func controlFunc(network, address string, c syscall.RawConn) error {
 	if Protector == nil {
@@ -69,20 +83,116 @@ func controlFunc(network, address string, c syscall.RawConn) error {
 
 // NewDialer returns a net.Dialer that calls Protector on each new socket.
 //
-// The dialer is intentionally IPv4-preferring: most carrier networks the
-// Android client runs on (LTE / mobile data) only carry IPv4 reliably, and
-// Go's default Happy Eyeballs path otherwise tries an AAAA address first
-// and fails with ENETUNREACH on the underlying interface — even after
-// VpnService.protect() reroutes the fd. Forcing tcp4 keeps that path
-// deterministic. Callers that need IPv6 explicitly should use a custom
-// Dialer.
+// The dialer is IPv4-preferring: most carrier networks the Android client
+// runs on only carry IPv4 reliably, and Go's default Happy Eyeballs
+// otherwise tries AAAA first and fails with ENETUNREACH — even after
+// VpnService.protect() reroutes the fd. FallbackDelay: -1 disables
+// the IPv4/IPv6 race.
 func NewDialer() *net.Dialer {
 	return &net.Dialer{
-		Timeout:       dialTimeout,
-		KeepAlive:     keepAlive,
+		Timeout:       defaultDialTimeout,
+		KeepAlive:     defaultKeepAlive,
 		Control:       controlFunc,
-		FallbackDelay: -1, // disable IPv4/IPv6 Happy Eyeballs race
+		FallbackDelay: -1,
 	}
+}
+
+// NewTLSConfig returns the shared TLS policy for provider HTTP/WebSocket clients.
+func NewTLSConfig() *tls.Config {
+	return &tls.Config{MinVersion: tls.VersionTLS12}
+}
+
+// NewHTTPTransport returns an HTTP transport using protected sockets.
+func NewHTTPTransport() *http.Transport {
+	return &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           protectedRaceDial,
+		TLSClientConfig:       NewTLSConfig(),
+		ForceAttemptHTTP2:     false,
+		MaxIdleConns:          10,
+		IdleConnTimeout:       defaultIdleConnTimeout,
+		TLSHandshakeTimeout:   defaultTLSHandshake,
+		ResponseHeaderTimeout: defaultResponseHeader,
+	}
+}
+
+// NewHTTPClient returns an http.Client using protected sockets and a
+// protected resolver. Hostname resolution is performed via raceResolve,
+// which queries all configured upstreams over both UDP/53 and TCP/53 in
+// parallel and takes the first success. The connect step then dials each
+// returned IPv4 in order until one succeeds, again through a protected socket.
+func NewHTTPClient() *http.Client {
+	return &http.Client{
+		Transport: NewHTTPTransport(),
+		Timeout:   defaultHTTPClientTimeout,
+	}
+}
+
+// NewWebSocketDialer returns a WebSocket dialer using protected sockets and shared TLS policy.
+func NewWebSocketDialer(handshakeTimeout time.Duration) websocket.Dialer {
+	if handshakeTimeout <= 0 {
+		handshakeTimeout = defaultWebSocketTimeout
+	}
+	return websocket.Dialer{
+		NetDialContext:  DialContext,
+		Proxy:           http.ProxyFromEnvironment,
+		TLSClientConfig: NewTLSConfig(),
+		HandshakeTimeout: handshakeTimeout,
+	}
+}
+
+// StatusError formats an upstream HTTP error while bounding and redacting the body.
+func StatusError(base error, resp *http.Response, limit int64) error {
+	if limit <= 0 {
+		limit = defaultStatusBodyLimit
+	}
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, limit))
+	bodyText := RedactSensitive(strings.TrimSpace(string(body)))
+	if bodyText == "" {
+		return fmt.Errorf("%w: status %d", base, resp.StatusCode)
+	}
+	return fmt.Errorf("%w: status %d: %s", base, resp.StatusCode, bodyText)
+}
+
+// RedactSensitive removes common token-like values from provider error text.
+func RedactSensitive(text string) string {
+	text = sensitiveBearerRE.ReplaceAllString(text, "${1}<redacted>")
+	return sensitiveFieldRE.ReplaceAllString(text, "${1}<redacted>")
+}
+
+// DialContext dials using a protected socket with race-based DNS
+// resolution. Forces tcp4 for plain "tcp" networks to avoid IPv6
+// routing issues on mobile carriers.
+func DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	if !strings.HasSuffix(network, "4") && !strings.HasSuffix(network, "6") {
+		network = network + "4"
+	}
+	conn, err := protectedRaceDial(ctx, network, address)
+	if err != nil {
+		return nil, fmt.Errorf("dial failed: %w", err)
+	}
+	return conn, nil
+}
+
+// ProxyDialer implements golang.org/x/net/proxy.Dialer for pion ICE.
+type ProxyDialer struct{}
+
+// Dial connects to the address on the named network using a protected
+// socket and race-based DNS resolution. Forces tcp4 for plain "tcp".
+func (d *ProxyDialer) Dial(network, addr string) (net.Conn, error) {
+	if !strings.HasSuffix(network, "4") && !strings.HasSuffix(network, "6") {
+		network = network + "4"
+	}
+	conn, err := protectedRaceDial(context.Background(), network, addr)
+	if err != nil {
+		return nil, fmt.Errorf("dial failed: %w", err)
+	}
+	return conn, nil
+}
+
+// NewProxyDialer returns a proxy.Dialer that protects ICE sockets.
+func NewProxyDialer() *ProxyDialer {
+	return &ProxyDialer{}
 }
 
 // raceResolve resolves host to a list of IPv4 addresses by querying the
@@ -90,9 +200,6 @@ func NewDialer() *net.Dialer {
 // both UDP/53 and TCP/53 in parallel. The first goroutine to return a
 // non-empty list of A records wins; everyone else is cancelled. All
 // sockets go through controlFunc so they bypass the Android VPN tunnel.
-//
-// Returns an aggregated error if every (server, protocol) pair fails
-// within ctx.
 //
 //nolint:cyclop // the parallel race naturally has several terminal branches
 func raceResolve(ctx context.Context, host string) ([]net.IP, error) {
@@ -107,7 +214,7 @@ func raceResolve(ctx context.Context, host string) ([]net.IP, error) {
 		return nil, errors.New("no DNS servers configured")
 	}
 
-	raceCtx, cancel := context.WithTimeout(ctx, dialTimeout)
+	raceCtx, cancel := context.WithTimeout(ctx, defaultDialTimeout)
 	defer cancel()
 
 	type raceResult struct {
@@ -176,8 +283,7 @@ func dnsServerList() []string {
 }
 
 // lookupVia performs a single A-record lookup for host against the given
-// server (host:port) using the given protected transport (udp4 or tcp4).
-// It returns only IPv4 addresses.
+// server using the given protected transport (udp4 or tcp4).
 func lookupVia(ctx context.Context, host, server, network string) ([]net.IP, error) {
 	r := &net.Resolver{
 		PreferGo: true,
@@ -210,30 +316,6 @@ func lookupVia(ctx context.Context, host, server, network string) ([]net.IP, err
 	return out, nil
 }
 
-// NewHTTPClient returns an http.Client using protected sockets and a
-// protected resolver. Outgoing connections are pinned to IPv4 to dodge
-// IPv6 routing surprises on mobile carriers.
-//
-// Hostname resolution is performed via raceResolve, which queries all
-// configured upstreams (HTTPDNSServer + DNSFallbackServers) over both
-// UDP/53 and TCP/53 in parallel and takes the first success. The
-// connect step then dials each returned IPv4 in order until one
-// succeeds, again through a protected socket.
-func NewHTTPClient() *http.Client {
-	transport := &http.Transport{
-		DialContext:           protectedRaceDial,
-		ForceAttemptHTTP2:     false,
-		MaxIdleConns:          10,
-		IdleConnTimeout:       30 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: 15 * time.Second,
-	}
-	return &http.Client{
-		Transport: transport,
-		Timeout:   25 * time.Second,
-	}
-}
-
 // protectedRaceDial resolves the host part of addr via raceResolve and
 // dials each returned IPv4 in order using a protected tcp4 socket. If
 // addr is already a literal IP, it is dialed directly (still protected).
@@ -250,7 +332,6 @@ func protectedRaceDial(ctx context.Context, network, addr string) (net.Conn, err
 	dialer := NewDialer()
 
 	if ip := net.ParseIP(host); ip != nil {
-		_ = ip
 		return dialer.DialContext(ctx, network, addr)
 	}
 
@@ -272,40 +353,4 @@ func protectedRaceDial(ctx context.Context, network, addr string) (net.Conn, err
 		lastErr = fmt.Errorf("no IPv4 returned for %s", host)
 	}
 	return nil, fmt.Errorf("dial %s: %w", host, lastErr)
-}
-
-// DialContext dials using a protected socket with race-based DNS
-// resolution. Forces tcp4 for plain "tcp" networks (same as NewHTTPClient)
-// to avoid IPv6 routing issues on mobile carriers.
-func DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	if !strings.HasSuffix(network, "4") && !strings.HasSuffix(network, "6") {
-		network = network + "4"
-	}
-	conn, err := protectedRaceDial(ctx, network, address)
-	if err != nil {
-		return nil, fmt.Errorf("dial failed: %w", err)
-	}
-	return conn, nil
-}
-
-// ProxyDialer implements golang.org/x/net/proxy.Dialer for pion ICE.
-type ProxyDialer struct{}
-
-// Dial connects to the address on the named network using a protected
-// socket and race-based DNS resolution. Forces tcp4 for plain "tcp" to
-// match DialContext behaviour.
-func (d *ProxyDialer) Dial(network, addr string) (net.Conn, error) {
-	if !strings.HasSuffix(network, "4") && !strings.HasSuffix(network, "6") {
-		network = network + "4"
-	}
-	conn, err := protectedRaceDial(context.Background(), network, addr)
-	if err != nil {
-		return nil, fmt.Errorf("dial failed: %w", err)
-	}
-	return conn, nil
-}
-
-// NewProxyDialer returns a proxy.Dialer that protects ICE sockets.
-func NewProxyDialer() *ProxyDialer {
-	return &ProxyDialer{}
 }
