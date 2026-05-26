@@ -59,6 +59,8 @@ jobs:
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
+          cd library/core/olcrtc_local && go mod tidy && cd -
+          cd library/core && go mod tidy && cd -
           ./run lib core
       - name: Upload Artifacts
         uses: actions/upload-artifact@v7
