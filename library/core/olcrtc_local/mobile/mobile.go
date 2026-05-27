@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"sync"
@@ -552,7 +553,13 @@ func startWithConfig(
 	}
 
 	if cfg.dnsServer != "" {
-		protect.HTTPDNSServer = cfg.dnsServer
+		net.DefaultResolver = &net.Resolver{
+			PreferGo: true,
+			Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+				d := net.Dialer{Timeout: 3 * time.Second}
+				return d.DialContext(ctx, network, cfg.dnsServer)
+			},
+		}
 	}
 
 	roomURL := buildRoomURL(carrierName, roomID)
