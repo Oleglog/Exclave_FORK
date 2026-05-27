@@ -41,10 +41,11 @@ type Provider struct{}
 // Engine reports which engine consumes credentials from this auth provider.
 func (Provider) Engine() string { return "jitsi" }
 
-const defaultServiceURL = "https://meet.cryptopro.ru"
+const defaultServiceURL = "https://meet1.arbitr.ru"
 
 // DefaultServiceURL returns the default Jitsi Meet service URL used by config
-// defaults and interactive helpers.
+// defaults and interactive helpers. Alternative servers accessible in their
+// network: https://meet.cryptopro.ru
 func (Provider) DefaultServiceURL() string { return defaultServiceURL }
 
 // Issue parses cfg.RoomURL into host+room and returns engine credentials.
