@@ -53,15 +53,21 @@ func (Provider) DefaultServiceURL() string { return defaultServiceURL }
 // The URL field of the returned Credentials carries the Jitsi host (e.g.
 // "meet.example.com"); the room name lives in Extra under CredentialKeyRoom.
 // Token is unused — Jitsi guest access requires no token.
+// If cfg.Insecure is true, Extra["insecure"] is set to "true" so the engine
+// dials ws:// instead of wss://.
 func (Provider) Issue(_ context.Context, cfg auth.Config) (auth.Credentials, error) {
 	host, room, err := parseRoomURL(cfg.RoomURL)
 	if err != nil {
 		return auth.Credentials{}, err
 	}
+	extra := map[string]string{CredentialKeyRoom: room}
+	if cfg.Insecure {
+		extra["insecure"] = "true"
+	}
 	return auth.Credentials{
 		URL:   host,
 		Token: "",
-		Extra: map[string]string{CredentialKeyRoom: room},
+		Extra: extra,
 	}, nil
 }
 

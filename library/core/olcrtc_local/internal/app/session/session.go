@@ -191,6 +191,7 @@ type Config struct {
 	DNSServer             string
 	SOCKSProxyAddr        string
 	SOCKSProxyPort        int
+	Insecure              bool
 	Video                 VideoConfig
 	VP8                   VP8Config
 	SEI                   SEIConfig
@@ -688,6 +689,7 @@ func runOnce(
 			DNSServer:        cfg.DNSServer,
 			SOCKSProxyAddr:   cfg.SOCKSProxyAddr,
 			SOCKSProxyPort:   cfg.SOCKSProxyPort,
+			Insecure:         cfg.Insecure,
 			TransportOptions: opts,
 			Engine:           cfg.Engine,
 			URL:              cfg.URL,
@@ -716,6 +718,7 @@ func runOnce(
 			KeyHex:           cfg.KeyHex,
 			LocalAddr:        fmt.Sprintf("%s:%d", cfg.SOCKSHost, cfg.SOCKSPort),
 			DNSServer:        cfg.DNSServer,
+			Insecure:         cfg.Insecure,
 			SOCKSUser:        cfg.SOCKSUser,
 			SOCKSPass:        cfg.SOCKSPass,
 			TransportOptions: opts,
