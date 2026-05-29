@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"hash/fnv"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,11 +32,15 @@ import (
 const (
 	defaultMaxPayloadSize = 60 * 1024
 	defaultConnectTimeout = 60 * time.Second
-	rtpBufSize            = 65536
-	outboundQueueSize     = 8192
-	inboundQueueSize      = 8192
-	canSendHighWatermark  = 90 // percent
-	keepaliveIdlePeriod   = 100 * time.Millisecond
+	rtpBufSize = 65536
+	// outboundQueueSize bounds KCP packets waiting for the paced writer. Sized
+	// to a couple of send windows so KCP's flush never blocks (a blocked
+	// WriteTo would stall KCP's update loop and delay ACKs); the paced writer
+	// keeps it drained so this depth is headroom, not standing latency.
+	outboundQueueSize    = 2048
+	inboundQueueSize     = 8192
+	canSendHighWatermark = 90 // percent
+	keepaliveIdlePeriod  = 100 * time.Millisecond
 )
 
 var (
@@ -89,6 +94,7 @@ type streamTransport struct {
 	stream        videoSession
 	track         *webrtc.TrackLocalStaticSample
 	onData        func([]byte)
+	onPeerData    func(peerID string, data []byte)
 	outbound      chan []byte
 	closeCh       chan struct{}
 	writerDone    chan struct{}
@@ -98,6 +104,7 @@ type streamTransport struct {
 	kcpOnce       sync.Once
 	frameInterval time.Duration
 	batchSize     int
+	perTickBytes  int
 
 	// localEpoch is stamped into every outgoing VP8 frame. Explicit
 	// upper-layer resets rotate it so the peer can reset its KCP state too.
@@ -106,12 +113,18 @@ type streamTransport struct {
 	epochMu      sync.RWMutex
 	localEpoch   uint32
 	peerEpoch    atomic.Uint32
-	hadPeer      atomic.Bool
 
-	kcp         *kcpRuntime
-	kcpMu       sync.RWMutex
-	reconnectMu sync.Mutex
-	reconnectFn func()
+	kcp           *kcpRuntime
+	kcpMu         sync.RWMutex
+	reconnectMu   sync.Mutex
+	reconnectFn   func()
+	peerConfirmed atomic.Bool
+
+	// Multi-peer support: when onPeerData is set, each remote epoch gets
+	// its own KCP runtime and data is routed via onPeerData(peerID, ...).
+	peersMu sync.RWMutex
+	peers   map[uint32]*kcpRuntime // epoch → KCP runtime
+	peerOut map[uint32]chan []byte // epoch → outbound queue
 }
 
 // New creates a vp8channel transport backed by a carrier engine.
@@ -158,6 +171,22 @@ func New(ctx context.Context, cfg transport.Config) (transport.Transport, error)
 		return nil, fmt.Errorf("create local video track: %w", err)
 	}
 
+	tr := newStreamTransport(stream, track, cfg, opts)
+
+	if err := stream.AddTrack(track); err != nil {
+		return nil, fmt.Errorf("attach local video track: %w", err)
+	}
+	stream.SetTrackHandler(tr.handleRemoteTrack)
+
+	return tr, nil
+}
+
+func newStreamTransport(
+	stream *engineVideoSession,
+	track *webrtc.TrackLocalStaticSample,
+	cfg transport.Config,
+	opts Options,
+) *streamTransport {
 	fps := opts.FPS
 	batchSize := opts.BatchSize
 	if fps <= 0 {
@@ -166,26 +195,52 @@ func New(ctx context.Context, cfg transport.Config) (transport.Transport, error)
 	if batchSize <= 0 {
 		batchSize = defaultBatchSize
 	}
+	byteRate := opts.MaxBytesPerSec
+	if byteRate <= 0 {
+		byteRate = defaultMaxBytesPerSec
+	}
+	// Bytes we may emit per frame tick to hold the wire under byteRate. The
+	// ticker already paces at fps, so a per-tick cap bounds the rate without
+	// any token bookkeeping. Floor at one epoch header so keepalives fit.
+	perTickBytes := byteRate / fps
+	if perTickBytes < epochHdrLen {
+		perTickBytes = epochHdrLen
+	}
 
 	tr := &streamTransport{
 		stream:        stream,
 		track:         track,
 		onData:        cfg.OnData,
+		onPeerData:    cfg.OnPeerData,
 		outbound:      make(chan []byte, outboundQueueSize),
 		closeCh:       make(chan struct{}),
 		writerDone:    make(chan struct{}),
 		frameInterval: time.Second / time.Duration(fps),
 		batchSize:     batchSize,
+		perTickBytes:  perTickBytes,
 		bindingToken:  bindingToken(cfg.RoomURL),
 		localEpoch:    randomEpoch(),
+		peers:         make(map[uint32]*kcpRuntime),
+		peerOut:       make(map[uint32]chan []byte),
 	}
 
-	if err := stream.AddTrack(track); err != nil {
-		return nil, fmt.Errorf("attach local video track: %w", err)
+	// In single-peer mode, confirm the peer epoch on first successful KCP
+	// delivery. This ensures we latch on the server (which completes
+	// handshake) rather than another client whose frames arrive first.
+	if cfg.OnData != nil && cfg.OnPeerData == nil {
+		inner := cfg.OnData
+		tr.onData = func(data []byte) {
+			if !tr.peerConfirmed.Swap(true) {
+				epoch := tr.peerEpoch.Load()
+				logger.Infof("vp8channel: peer confirmed epoch=0x%08x", epoch)
+			}
+			inner(data)
+		}
+	} else {
+		tr.onData = cfg.OnData
 	}
-	stream.SetTrackHandler(tr.handleRemoteTrack)
 
-	return tr, nil
+	return tr
 }
 
 func (p *streamTransport) Connect(ctx context.Context) error {
@@ -314,6 +369,29 @@ func (p *streamTransport) Send(data []byte) error {
 	return rt.send(data)
 }
 
+// SendTo transmits data to a specific peer identified by its epoch hex string.
+func (p *streamTransport) SendTo(peerID string, data []byte) error {
+	if p.closed.Load() {
+		return ErrTransportClosed
+	}
+	epoch, err := parsePeerID(peerID)
+	if err != nil {
+		return fmt.Errorf("vp8channel: invalid peerID %q: %w", peerID, err)
+	}
+	p.peersMu.RLock()
+	rt := p.peers[epoch]
+	p.peersMu.RUnlock()
+	if rt == nil {
+		return ErrTransportClosed
+	}
+	return rt.send(data)
+}
+
+// SupportsPeerRouting reports whether this transport can address individual peers.
+func (p *streamTransport) SupportsPeerRouting() bool {
+	return p.onPeerData != nil
+}
+
 func (p *streamTransport) Close() error {
 	if p.closed.CompareAndSwap(false, true) {
 		close(p.closeCh)
@@ -324,6 +402,14 @@ func (p *streamTransport) Close() error {
 		if rt != nil {
 			rt.close()
 		}
+
+		p.peersMu.Lock()
+		for _, prt := range p.peers {
+			prt.close()
+		}
+		p.peers = make(map[uint32]*kcpRuntime)
+		p.peerOut = make(map[uint32]chan []byte)
+		p.peersMu.Unlock()
 
 		if p.writerUp.Load() {
 			<-p.writerDone
@@ -422,7 +508,7 @@ func (p *streamTransport) writerLoop() {
 			var sample []byte
 			select {
 			case frame := <-p.outbound:
-				sample = p.batchSample(frame)
+				sample = p.batchSample(frame, p.perTickBytes)
 				idleTicks = 0
 			default:
 				idleTicks++
@@ -442,7 +528,10 @@ func (p *streamTransport) writerLoop() {
 	}
 }
 
-func (p *streamTransport) batchSample(first []byte) []byte {
+func (p *streamTransport) batchSample(first []byte, maxBytes int) []byte {
+	if maxBytes <= 0 || maxBytes > defaultMaxPayloadSize {
+		maxBytes = defaultMaxPayloadSize
+	}
 	if len(first) <= epochHdrLen || p.batchSize <= 1 {
 		return first
 	}
@@ -459,7 +548,7 @@ func (p *streamTransport) batchSample(first []byte) []byte {
 				continue
 			}
 			payload := frame[epochHdrLen:]
-			if len(sample)+2+len(payload) > defaultMaxPayloadSize {
+			if len(sample)+2+len(payload) > maxBytes {
 				return sample
 			}
 			sample = appendBatchPacket(sample, payload)
@@ -603,49 +692,38 @@ func (p *streamTransport) readVP8Track(track *webrtc.TrackRemote) {
 
 func (p *streamTransport) handleFirstPeer(peerEpoch uint32) {
 	p.peerEpoch.Store(peerEpoch)
-	logger.Infof("vp8channel: peer first seen epoch=0x%08x", peerEpoch)
+	p.peerConfirmed.Store(true)
+	logger.Infof("vp8channel: peer latched epoch=0x%08x", peerEpoch)
 }
 
-// handleIncomingFrame parses the epoch header and either delivers the KCP
-// payload to the local session or triggers a reset when the peer's epoch
-// changes (peer process restart).
+// handleIncomingFrame parses the epoch header and delivers KCP payload.
 func (p *streamTransport) handleIncomingFrame(frame []byte) {
 	frameToken, peerEpoch, ok := parseEpochHeader(frame)
 	if !ok {
-		logger.Debugf("vp8channel: frame header checksum mismatch")
 		return
 	}
 	if frameToken != p.bindingToken {
-		logger.Debugf("vp8channel: frame token mismatch got=0x%08x want=0x%08x (foreign client or noise)",
-			frameToken, p.bindingToken)
 		return
 	}
 	kcpPayload := frame[epochHdrLen:]
-	// Some carriers/SFUs reflect our own published VP8 track back to us as a
-	// remote track. Those frames carry our local epoch, not the peer's. If we
-	// treat them as peer traffic, epoch tracking toggles between "self" and
-	// "peer" and both sides loop forever resetting smux/KCP.
 	if peerEpoch == p.localEpochValue() {
-		logger.Debugf("vp8channel: self-echo detected epoch=0x%08x (SFU reflects our own track)", peerEpoch)
 		return
 	}
 
-	if !p.hadPeer.Swap(true) {
+	// Multi-peer mode: route each epoch to its own KCP runtime.
+	if p.onPeerData != nil {
+		p.handlePeerFrame(peerEpoch, kcpPayload)
+		return
+	}
+
+	// Single-peer mode: latch on first epoch seen, ignore all others.
+	if !p.peerConfirmed.Load() {
 		p.handleFirstPeer(peerEpoch)
 	} else if prev := p.peerEpoch.Load(); prev != peerEpoch {
-		// Peer restarted its KCP session. Reset ours so the conv state
-		// machines re-converge. CAS guards against double-reset when
-		// fragmented frames straddle the epoch boundary.
-		if p.peerEpoch.CompareAndSwap(prev, peerEpoch) {
-			p.resetKCP()
-			p.reconnectMu.Lock()
-			fn := p.reconnectFn
-			p.reconnectMu.Unlock()
-			if fn != nil {
-				fn()
-			}
-		}
-		// Drop this packet: it predates our fresh KCP session.
+		// In a multi-participant room, other clients also publish VP8
+		// tracks. Their epochs differ from our latched peer (the server).
+		// Simply ignore frames that don't match our peer — they belong to
+		// other participants we don't communicate with.
 		return
 	}
 
@@ -658,6 +736,91 @@ func (p *streamTransport) handleIncomingFrame(frame []byte) {
 	if rt != nil {
 		deliverKCPPayload(rt, kcpPayload)
 	}
+}
+
+// handlePeerFrame routes incoming KCP data to a per-peer KCP runtime,
+// creating one on demand. Each peer epoch gets its own independent KCP
+// session so multiple clients can coexist in the same room.
+func (p *streamTransport) handlePeerFrame(peerEpoch uint32, kcpPayload []byte) {
+	if len(kcpPayload) == 0 {
+		// Keepalive — ensure peer is registered but nothing to deliver.
+		p.getOrCreatePeerKCP(peerEpoch)
+		return
+	}
+
+	rt := p.getOrCreatePeerKCP(peerEpoch)
+	if rt != nil {
+		deliverKCPPayload(rt, kcpPayload)
+	}
+}
+
+func (p *streamTransport) getOrCreatePeerKCP(epoch uint32) *kcpRuntime {
+	p.peersMu.RLock()
+	rt := p.peers[epoch]
+	p.peersMu.RUnlock()
+	if rt != nil {
+		return rt
+	}
+
+	p.peersMu.Lock()
+	defer p.peersMu.Unlock()
+
+	// Double-check after acquiring write lock.
+	if rt = p.peers[epoch]; rt != nil {
+		return rt
+	}
+
+	peerID := formatPeerID(epoch)
+	out := make(chan []byte, outboundQueueSize)
+	hdr := buildEpochHeader(p.bindingToken, p.localEpochValue())
+	rt, err := startKCP(out, func(data []byte) {
+		if p.onPeerData != nil {
+			p.onPeerData(peerID, data)
+		}
+	}, hdr)
+	if err != nil {
+		logger.Warnf("vp8channel: startKCP for peer 0x%08x failed: %v", epoch, err)
+		return nil
+	}
+	p.peers[epoch] = rt
+	p.peerOut[epoch] = out
+	logger.Infof("vp8channel: peer session created epoch=0x%08x", epoch)
+
+	// Pump outbound frames from this peer's queue into the writer.
+	go p.peerWriterPump(epoch, out)
+
+	return rt
+}
+
+// peerWriterPump drains a peer's outbound KCP queue and writes frames to the
+// shared video track. Stops when the channel is closed or transport shuts down.
+func (p *streamTransport) peerWriterPump(_ uint32, out chan []byte) {
+	for {
+		select {
+		case <-p.closeCh:
+			return
+		case frame, ok := <-out:
+			if !ok {
+				return
+			}
+			_ = p.track.WriteSample(media.Sample{
+				Data:     frame,
+				Duration: p.frameInterval,
+			})
+		}
+	}
+}
+
+func formatPeerID(epoch uint32) string {
+	return fmt.Sprintf("%08x", epoch)
+}
+
+func parsePeerID(peerID string) (uint32, error) {
+	v, err := strconv.ParseUint(peerID, 16, 32)
+	if err != nil {
+		return 0, fmt.Errorf("parse peer ID %q: %w", peerID, err)
+	}
+	return uint32(v), nil
 }
 
 func deliverKCPPayload(rt *kcpRuntime, payload []byte) {
