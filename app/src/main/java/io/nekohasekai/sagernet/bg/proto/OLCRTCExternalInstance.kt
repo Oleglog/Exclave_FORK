@@ -237,8 +237,13 @@ class OLCRTCExternalInstance(
                     val socket = Socket(
                         Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", port))
                     )
-                    socket.soTimeout = 5_000
-                    socket.connect(InetSocketAddress("77.88.8.8", 53), 5_000)
+                    // 30s timeout (was 5s). Under sustained user traffic the
+                    // tunnel queue is contested and a 5s budget is not enough
+                    // for the SOCKS5 handshake + remote dial to complete,
+                    // causing keepalive false-positives that tear the session
+                    // down every time the user scrolls.
+                    socket.soTimeout = 30_000
+                    socket.connect(InetSocketAddress("77.88.8.8", 53), 30_000)
                     socket.close()
                     Logs.d("[olcrtc] keepalive OK")
                 } catch (e: Exception) {
