@@ -50,6 +50,9 @@ jobs:
           go clean -modcache || true
           cd library/core/olcrtc_local && go mod download && go mod tidy && cd -
           cd library/core && go mod download && go mod tidy && cd -
+          echo "=== Resolved j module ==="
+          cd library/core && go list -m -json github.com/zarazaex69/j || true
+          cd -
           ./run lib core debug
       - name: Upload Artifacts
         uses: actions/upload-artifact@v7

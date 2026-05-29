@@ -66,6 +66,12 @@ jobs:
           go clean -modcache || true
           cd library/core/olcrtc_local && go mod download && go mod tidy && cd -
           cd library/core && go mod download && go mod tidy && cd -
+          # Print exactly which j is resolved — so we can stop guessing
+          # whether Oleglog/j ships in the AAR or zarazaex69/j (original)
+          # silently leaks through when the replace directive is broken.
+          echo "=== Resolved j module ==="
+          cd library/core && go list -m -json github.com/zarazaex69/j || true
+          cd -
           ./run lib core
       - name: Upload Artifacts
         uses: actions/upload-artifact@v7
