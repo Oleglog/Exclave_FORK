@@ -351,13 +351,17 @@ func TestHandleIncomingFrameEpochFilteringAndReconnect(t *testing.T) {
 
 	tr.handleIncomingFrame(mkFrame(bindingToken("other"), 1, []byte("x")))
 	tr.handleIncomingFrame(mkFrame(tr.bindingToken, tr.localEpoch, []byte("self")))
-	if tr.hadPeer.Load() || called != 0 {
+	if tr.peerConfirmed.Load() || called != 0 {
 		t.Fatal("filtered frames changed peer state")
 	}
 
+	// Keepalive (nil payload) latches peer immediately.
 	tr.handleIncomingFrame(mkFrame(tr.bindingToken, 1, nil))
-	if !tr.hadPeer.Load() || tr.peerEpoch.Load() != 1 {
-		t.Fatalf("peer state after first frame: had=%v epoch=%d", tr.hadPeer.Load(), tr.peerEpoch.Load())
+	if !tr.peerConfirmed.Load() {
+		t.Fatal("first frame should confirm peer")
+	}
+	if tr.peerEpoch.Load() != 1 {
+		t.Fatalf("peer epoch not stored: got %d want 1", tr.peerEpoch.Load())
 	}
 
 	reconnected := false
@@ -374,8 +378,16 @@ func TestHandleIncomingFrameEpochFilteringAndReconnect(t *testing.T) {
 		t.Fatalf("stream reconnect did not reset/callback: reconnected=%v kcp=%v", reconnected, tr.kcp)
 	}
 	reconnected = false
-	tr.handleIncomingFrame(mkFrame(tr.bindingToken, 2, []byte("after-restart")))
-	if !reconnected || tr.peerEpoch.Load() != 2 || tr.kcp == nil {
-		t.Fatalf("epoch change did not reset/reconnect: reconnected=%v epoch=%d kcp=%v", reconnected, tr.peerEpoch.Load(), tr.kcp) //nolint:lll // long test description
+	// After reconnect, peerConfirmed is reset so the next frame re-latches
+	// the peer epoch. This allows the server to restart with a new epoch.
+	if tr.peerConfirmed.Load() {
+		t.Fatal("reconnect should reset peerConfirmed")
+	}
+	tr.handleIncomingFrame(mkFrame(tr.bindingToken, 2, []byte("new-peer-after-reconnect")))
+	if !tr.peerConfirmed.Load() {
+		t.Fatal("frame after reconnect should re-latch peer")
+	}
+	if tr.peerEpoch.Load() != 2 {
+		t.Fatalf("peer epoch not re-latched: got %d want 2", tr.peerEpoch.Load())
 	}
 }
