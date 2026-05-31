@@ -3,22 +3,19 @@
 'use strict';
 
 const API = '/api';
-let token = localStorage.getItem('olcrtc_token') || '';
+let creds = JSON.parse(localStorage.getItem('olcrtc_creds') || 'null'); // {username, password}
 
 // ── Network helper ───────────────────────────────────────────────────────────
 async function api(path, opts = {}) {
   const url = API + path;
-  const res = await fetch(url, {
-    headers: {
-      'Authorization': 'Bearer ' + token,
-      'Content-Type': 'application/json',
-      ...opts.headers
-    },
-    ...opts
-  });
+  const headers = { 'Content-Type': 'application/json', ...opts.headers };
+  if (creds) {
+    headers['Authorization'] = 'Basic ' + btoa(creds.username + ':' + creds.password);
+  }
+  const res = await fetch(url, { headers, ...opts });
   if (res.status === 401) {
-    localStorage.removeItem('olcrtc_token');
-    token = '';
+    localStorage.removeItem('olcrtc_creds');
+    creds = null;
     route('/login');
     throw new Error('Unauthorized');
   }
@@ -30,12 +27,39 @@ async function api(path, opts = {}) {
   return res.json();
 }
 
+// ── Theme helper ─────────────────────────────────────────────────────────────
+function getTheme() {
+  return localStorage.getItem('olcrtc_theme') || 'dark';
+}
+
+function setTheme(theme) {
+  localStorage.setItem('olcrtc_theme', theme);
+  document.documentElement.setAttribute('data-theme', theme);
+}
+
+function toggleTheme() {
+  const current = getTheme();
+  const next = current === 'dark' ? 'light' : 'dark';
+  setTheme(next);
+  return next;
+}
+
 // ── DOM helpers ──────────────────────────────────────────────────────────────
 function el(type, cls, text) {
   const e = document.createElement(type);
   if (cls) e.className = cls;
   if (text !== undefined) e.textContent = text;
   return e;
+}
+
+function compareSemverJS(a, b) {
+  const ap = (a || '').replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
+  const bp = (b || '').replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < 3; i++) {
+    const av = ap[i] || 0, bv = bp[i] || 0;
+    if (av !== bv) return av - bv;
+  }
+  return 0;
 }
 
 const ICONS = {
@@ -66,7 +90,9 @@ const ICONS = {
   'download': '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
   'rotate-ccw': '<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>',
   'shield': '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
-  'sliders-horizontal': '<line x1="21" y1="4" x2="14" y2="4"/><line x1="10" y1="4" x2="3" y2="4"/><line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/><line x1="21" y1="20" x2="16" y2="20"/><line x1="12" y1="20" x2="3" y2="20"/><line x1="14" y1="2" x2="14" y2="6"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="16" y1="18" x2="16" y2="22"/>'
+  'sliders-horizontal': '<line x1="21" y1="4" x2="14" y2="4"/><line x1="10" y1="4" x2="3" y2="4"/><line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/><line x1="21" y1="20" x2="16" y2="20"/><line x1="12" y1="20" x2="3" y2="20"/><line x1="14" y1="2" x2="14" y2="6"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="16" y1="18" x2="16" y2="22"/>',
+  'sun': '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>',
+  'moon': '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>'
 };
 
 function icon(name, sz) {
@@ -180,7 +206,7 @@ function render() {
   const path = location.pathname;
   const app = document.getElementById('app');
   app.innerHTML = '';
-  if (!token && path !== '/login') {
+  if (!creds && path !== '/login') {
     route('/login');
     return;
   }
@@ -201,15 +227,20 @@ function renderLogin(app) {
   const title = el('h1', 'text-2xl font-bold text-center mb-2');
   title.textContent = 'olcRTC Admin';
   const subtitle = el('p', 'text-center text-gray-400 text-sm mb-6');
-  subtitle.textContent = 'Введите токен доступа';
+  subtitle.textContent = 'Введите логин и пароль';
   card.appendChild(title);
   card.appendChild(subtitle);
 
-  const inp = el('input', '');
-  inp.type = 'password';
-  inp.placeholder = 'Токен';
-  inp.setAttribute('aria-label', 'Токен доступа');
-  inp.className = 'mb-3';
+  const userInp = el('input', 'mb-3');
+  userInp.type = 'text';
+  userInp.placeholder = 'Логин';
+  userInp.value = 'admin';
+  userInp.setAttribute('aria-label', 'Логин');
+
+  const passInp = el('input', 'mb-3');
+  passInp.type = 'password';
+  passInp.placeholder = 'Пароль';
+  passInp.setAttribute('aria-label', 'Пароль');
 
   const btn = el('button', 'btn btn-primary w-full');
   btn.textContent = 'Войти';
@@ -220,35 +251,37 @@ function renderLogin(app) {
     err.classList.add('hidden');
     await withLoading(btn, async () => {
       try {
+        const u = userInp.value;
+        const p = passInp.value;
         const res = await fetch(API + '/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: inp.value })
+          body: JSON.stringify({ username: u, password: p })
         });
         const data = await res.json();
         if (data.ok) {
-          token = inp.value;
-          localStorage.setItem('olcrtc_token', token);
+          creds = { username: u, password: p };
+          localStorage.setItem('olcrtc_creds', JSON.stringify(creds));
           route('/');
         } else {
           throw new Error('invalid');
         }
       } catch (e) {
-        err.textContent = 'Неверный токен';
+        err.textContent = 'Неверный логин или пароль';
         err.classList.remove('hidden');
       }
     });
   }
   btn.onclick = submit;
-  inp.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
+  passInp.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
 
-  card.appendChild(inp);
+  card.appendChild(userInp);
+  card.appendChild(passInp);
   card.appendChild(btn);
   card.appendChild(err);
-  card.appendChild(el('p', 'text-gray-500 text-xs text-center mt-4', 'Токен хранится в /etc/olcrtc/admin.env'));
   box.appendChild(card);
   app.appendChild(box);
-  setTimeout(() => inp.focus(), 0);
+  setTimeout(() => passInp.focus(), 0);
 }
 
 // ── Dashboard ────────────────────────────────────────────────────────────────
@@ -258,9 +291,17 @@ async function renderDashboard(app) {
   // Header
   const header = el('div', 'flex items-center justify-between mb-6 flex-wrap gap-2');
   const titleWrap = el('div', 'flex items-center gap-2');
-  titleWrap.innerHTML = '<span class="text-emerald-400">' + icon('shield', 22) + '</span><h1 class="text-xl md:text-2xl font-semibold">olcRTC Admin</h1>';
+  titleWrap.innerHTML = '<span style="color: var(--color-primary)">' + icon('shield', 22) + '</span><h1 class="text-xl md:text-2xl font-semibold">olcRTC Admin</h1>';
   header.appendChild(titleWrap);
   const nav = el('div', 'flex gap-2');
+  const themeBtn = el('button', 'btn btn-secondary btn-sm');
+  themeBtn.setAttribute('aria-label', 'Переключить тему');
+  const currentTheme = getTheme();
+  themeBtn.innerHTML = currentTheme === 'dark' ? icon('sun') + '<span class="hidden sm:inline">Светлая</span>' : icon('moon') + '<span class="hidden sm:inline">Тёмная</span>';
+  themeBtn.onclick = () => {
+    const newTheme = toggleTheme();
+    themeBtn.innerHTML = newTheme === 'dark' ? icon('sun') + '<span class="hidden sm:inline">Светлая</span>' : icon('moon') + '<span class="hidden sm:inline">Тёмная</span>';
+  };
   const settingsBtn = el('button', 'btn btn-secondary btn-sm');
   settingsBtn.setAttribute('aria-label', 'Настройки');
   settingsBtn.innerHTML = icon('settings') + '<span class="hidden sm:inline">Настройки</span>';
@@ -268,7 +309,8 @@ async function renderDashboard(app) {
   const logoutBtn = el('button', 'btn btn-secondary btn-sm');
   logoutBtn.setAttribute('aria-label', 'Выход');
   logoutBtn.innerHTML = icon('log-out') + '<span class="hidden sm:inline">Выход</span>';
-  logoutBtn.onclick = () => { token = ''; localStorage.removeItem('olcrtc_token'); route('/login'); };
+  logoutBtn.onclick = () => { creds = null; localStorage.removeItem('olcrtc_creds'); route('/login'); };
+  nav.appendChild(themeBtn);
   nav.appendChild(settingsBtn);
   nav.appendChild(logoutBtn);
   header.appendChild(nav);
@@ -312,15 +354,7 @@ async function renderDashboard(app) {
   const addInstBtn = el('button', 'btn btn-primary btn-sm');
   addInstBtn.setAttribute('aria-label', 'Создать инстанс');
   addInstBtn.innerHTML = icon('plus') + '<span>Создать инстанс</span>';
-  addInstBtn.onclick = async () => {
-    await withLoading(addInstBtn, async () => {
-      try {
-        await api('/instances', { method: 'POST' });
-        showToast('Инстанс создан');
-        render();
-      } catch (e) { showToast('Не удалось создать инстанс: ' + e.message, 'error'); }
-    });
-  };
+  addInstBtn.onclick = () => showCreateInstanceModal();
   instHeader.appendChild(addInstBtn);
   instSection.appendChild(instHeader);
 
@@ -447,6 +481,30 @@ function renderInstanceCard(inst) {
   qrBtn.setAttribute('aria-label', 'Показать QR-код');
   qrBtn.innerHTML = icon('qr-code') + '<span>QR</span>';
   qrBtn.onclick = () => showQRModal(inst.uri, inst);
+  const pingBtn = el('button', 'btn btn-secondary btn-sm');
+  pingBtn.setAttribute('aria-label', 'Проверить соединение');
+  pingBtn.innerHTML = icon('wifi') + '<span>Пинг</span>';
+  pingBtn.onclick = async () => {
+    await withLoading(pingBtn, async () => {
+      try {
+        const res = await api('/instances/' + inst.id + '/ping', { method: 'POST' });
+        const targetLabel = ({
+          socks_proxy: 'SOCKS',
+          warp_proxy: 'WARP',
+          internet: 'интернет',
+        })[res.target_kind] || res.target_kind || 'цель';
+        if (res && res.ok) {
+          const rtt = (res.rtt_ms != null) ? res.rtt_ms.toFixed(1) + ' мс' : '';
+          const loss = (res.packet_loss != null && res.packet_loss > 0) ? ` · потери ${res.packet_loss}%` : '';
+          showToast(`${targetLabel} ${res.target} · ${rtt}${loss}`, 'success');
+        } else {
+          showToast(res.message || `Не удалось пинговать ${targetLabel}`, 'error');
+        }
+      } catch (e) {
+        showToast('Ошибка пинга: ' + e.message, 'error');
+      }
+    });
+  };
   const cfgBtn = el('button', 'btn btn-secondary btn-sm');
   cfgBtn.setAttribute('aria-label', 'Настройки инстанса');
   cfgBtn.innerHTML = icon('sliders') + '<span>Настройки</span>';
@@ -481,6 +539,7 @@ function renderInstanceCard(inst) {
   };
   actions.appendChild(uriBtn);
   actions.appendChild(qrBtn);
+  actions.appendChild(pingBtn);
   actions.appendChild(cfgBtn);
   actions.appendChild(startStopBtn);
   actions.appendChild(restartBtn);
@@ -636,22 +695,160 @@ async function renderSettings(app) {
     <div class="text-sm text-gray-300">Подписки: <span class="copyable">${sys.sub_port || '-'}</span></div>`;
   card.appendChild(portBlock);
 
+  // Server Updates
+  const updateBlock = el('div', '');
+  updateBlock.innerHTML = '<h3 class="font-semibold mb-2 inline-flex items-center gap-2">' + icon('download', 16) + '<span>Обновления</span></h3>';
+  const versionInfo = el('div', 'text-sm mb-3');
+  const currentSysVersion = (sys.version || '').toString();
+  versionInfo.innerHTML = '<div class="text-gray-300">Текущая версия: <span class="copyable">' + (currentSysVersion || '-') + '</span></div>';
+  updateBlock.appendChild(versionInfo);
+
+  const updateRow = el('div', 'flex gap-2 flex-wrap items-center');
+  const checkBtn = el('button', 'btn btn-secondary');
+  checkBtn.innerHTML = icon('refresh-cw') + '<span>Проверить обновления</span>';
+
+  // Version selector + install button row (rendered after check succeeds)
+  const selectorRow = el('div', 'flex gap-2 flex-wrap items-center mt-3');
+  selectorRow.style.display = 'none';
+  const selectorLabel = el('span', 'text-sm text-gray-300');
+  selectorLabel.textContent = 'Установить версию:';
+  const versionSelect = el('select', 'bg-gray-800 text-white text-sm border border-gray-700 rounded px-2 py-1');
+  versionSelect.style.cssText = 'min-width:160px;';
+  const installBtn = el('button', 'btn btn-primary');
+
+  function normVer(v) { return ('' + (v || '')).replace(/^v/, ''); }
+
+  function refreshInstallBtn() {
+    const target = versionSelect.value;
+    const isCurrent = normVer(target) === normVer(currentSysVersion);
+    installBtn.disabled = !target || isCurrent;
+    installBtn.style.opacity = installBtn.disabled ? '0.5' : '1';
+    installBtn.style.cursor = installBtn.disabled ? 'not-allowed' : 'pointer';
+    if (!target) {
+      installBtn.innerHTML = icon('download') + '<span>Установить</span>';
+    } else if (isCurrent) {
+      installBtn.innerHTML = icon('check-circle') + '<span>Версия установлена</span>';
+    } else {
+      installBtn.innerHTML = icon('download') + '<span>Установить ' + target + '</span>';
+    }
+  }
+  versionSelect.onchange = refreshInstallBtn;
+  installBtn.onclick = async () => {
+    const target = versionSelect.value;
+    if (!target || normVer(target) === normVer(currentSysVersion)) return;
+    const isDowngrade = compareSemverJS(normVer(target), normVer(currentSysVersion)) < 0;
+    const ok = await showConfirm({
+      title: isDowngrade ? 'Откатить версию?' : 'Обновить сервер?',
+      message: (isDowngrade ? 'Будет установлена более старая версия ' : 'Будет установлена версия ') + target +
+        '. Сервер и админка будут остановлены, заменены и перезапущены. Это займёт 1-2 минуты.',
+      confirmText: isDowngrade ? 'Откатить' : 'Установить',
+    });
+    if (!ok) return;
+    showUpdateOverlay(target);
+    try {
+      await api('/system/update', { method: 'POST', body: JSON.stringify({ version: target }) });
+    } catch (e) {
+      // expected during admin restart
+    }
+  };
+
+  selectorRow.appendChild(selectorLabel);
+  selectorRow.appendChild(versionSelect);
+  selectorRow.appendChild(installBtn);
+
+  async function loadReleasesIntoSelect(latestVersion) {
+    try {
+      const rel = await api('/system/releases');
+      const list = (rel && rel.releases) || [];
+      versionSelect.innerHTML = '';
+      if (!list.length) {
+        const opt = el('option', '');
+        opt.value = '';
+        opt.textContent = 'Нет доступных версий';
+        versionSelect.appendChild(opt);
+        return;
+      }
+      // Sort newest-first by semver desc
+      list.sort((a, b) => compareSemverJS(normVer(b.version), normVer(a.version)));
+      list.forEach((r) => {
+        const opt = el('option', '');
+        opt.value = r.version;
+        let label = r.version;
+        if (normVer(r.version) === normVer(currentSysVersion)) label += ' (текущая)';
+        else if (latestVersion && normVer(r.version) === normVer(latestVersion)) label += ' (последняя)';
+        opt.textContent = label;
+        versionSelect.appendChild(opt);
+      });
+      // Default selection: latest if newer than current, else current
+      const newest = list[0].version;
+      versionSelect.value = (compareSemverJS(normVer(newest), normVer(currentSysVersion)) > 0) ? newest : currentSysVersion;
+      refreshInstallBtn();
+    } catch (e) {
+      versionSelect.innerHTML = '';
+      const opt = el('option', '');
+      opt.value = '';
+      opt.textContent = 'Не удалось загрузить список версий';
+      versionSelect.appendChild(opt);
+    }
+  }
+
+  checkBtn.onclick = async () => {
+    await withLoading(checkBtn, async () => {
+      try {
+        const res = await api('/system/check-updates');
+        if (res.update_available) {
+          let toastMsg = 'Доступна новая версия: ' + res.latest_version;
+          if (res.stale) toastMsg = 'GitHub недоступен. Последние известные данные: ' + res.latest_version;
+          showToast(toastMsg, 'info');
+        } else {
+          let msg = 'У вас установлена последняя версия';
+          if (res.stale) msg = 'GitHub недоступен, проверка по последним известным данным: версия актуальна';
+          showToast(msg, 'success');
+        }
+        await loadReleasesIntoSelect(res.latest_version);
+        selectorRow.style.display = '';
+      } catch (e) {
+        let errMsg = e.message;
+        try {
+          const parsed = JSON.parse(e.message);
+          if (parsed.message) errMsg = parsed.message;
+        } catch {}
+        showToast('Ошибка проверки: ' + errMsg, 'error');
+      }
+    });
+  };
+
+  updateRow.appendChild(checkBtn);
+  updateBlock.appendChild(updateRow);
+  updateBlock.appendChild(selectorRow);
+  card.appendChild(updateBlock);
+
   // Security
   const secBlock = el('div', '');
   secBlock.innerHTML = '<h3 class="font-semibold mb-2 inline-flex items-center gap-2">' + icon('key', 16) + '<span>Безопасность</span></h3>';
-  const changeTokenBtn = el('button', 'btn btn-secondary');
-  changeTokenBtn.textContent = 'Сменить токен';
-  changeTokenBtn.onclick = async () => {
-    const ok = await showConfirm({ title: 'Сменить токен?', message: 'Старый токен перестанет работать. Сохраните новый сразу — он показывается только один раз.', danger: true, confirmText: 'Сменить' });
-    if (!ok) return;
-    try {
-      const res = await api('/auth/change-token', { method: 'POST', body: JSON.stringify({}) });
-      token = res.token;
-      localStorage.setItem('olcrtc_token', token);
-      showTokenModal(res.token);
-    } catch (e) { showToast('Ошибка: ' + e.message, 'error'); }
+  const secGrid = el('div', 'grid grid-cols-1 md:grid-cols-2 gap-3 mb-3');
+  const userField = makeInputField('Логин', icon('tag', 14), creds ? creds.username : 'admin', {});
+  const passField = makeInputField('Пароль', icon('lock', 14), creds ? creds.password : '', { placeholder: 'Новый пароль' });
+  passField.input.type = 'password';
+  secGrid.appendChild(userField.field);
+  secGrid.appendChild(passField.field);
+  secBlock.appendChild(secGrid);
+  const changeCredsBtn = el('button', 'btn btn-secondary');
+  changeCredsBtn.textContent = 'Сменить логин/пароль';
+  changeCredsBtn.onclick = async () => {
+    const u = userField.input.value.trim();
+    const p = passField.input.value.trim();
+    if (!u || !p) { showToast('Логин и пароль обязательны', 'error'); return; }
+    await withLoading(changeCredsBtn, async () => {
+      try {
+        await api('/auth/change-credentials', { method: 'POST', body: JSON.stringify({ username: u, password: p }) });
+        creds = { username: u, password: p };
+        localStorage.setItem('olcrtc_creds', JSON.stringify(creds));
+        showToast('Логин/пароль обновлены');
+      } catch (e) { showToast('Ошибка: ' + e.message, 'error'); }
+    });
   };
-  secBlock.appendChild(changeTokenBtn);
+  secBlock.appendChild(changeCredsBtn);
   card.appendChild(secBlock);
 
   // Logs
@@ -723,6 +920,15 @@ function showQRModal(uri, inst) {
       'WB Stream больше не создаёт румы автоматически — задайте Room ID в «Настройках» инстанса перед тем, как делиться QR.';
     div.appendChild(notice);
   }
+  if (inst && inst.transport === 'datachannel' && (inst.carrier === 'telemost' || inst.carrier === 'wbstream')) {
+    const dcWarn = el('div', 'p-2 mb-3 text-xs rounded border border-red-500/50 bg-red-500/10 text-red-200');
+    dcWarn.innerHTML =
+      '<strong>Несовместимый транспорт:</strong> DataChannel не работает с ' + inst.carrier + '. ' +
+      'Goolom SFU не маршрутизирует стандартный DC (dataChannelSharing=TO_RTP). ' +
+      (inst.carrier === 'wbstream' ? 'WB Stream DC требует canPublishData=true (модератор).' : '') +
+      ' Смените транспорт на <b>vp8channel</b> в настройках инстанса.';
+    div.appendChild(dcWarn);
+  }
   const qrWrap = el('div', 'qr-wrap flex justify-center mb-3 mx-auto');
   const qrDiv = el('div', '');
   qrWrap.appendChild(qrDiv);
@@ -746,27 +952,235 @@ function showQRModal(uri, inst) {
   closeBtn.onclick = () => closeModal(overlay);
 
   setTimeout(() => {
-    new QRCode(qrDiv, { text: uri, width: 280, height: 280, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.H });
+    if (!uri || uri.length > 2500) {
+      qrDiv.innerHTML = '<div class="text-red-400 text-xs p-2">URI слишком длинный для QR-кода (' + (uri ? uri.length : 0) + ' символов)</div>';
+      return;
+    }
+    try {
+      new QRCode(qrDiv, { text: uri, width: 280, height: 280, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
+    } catch (e) {
+      qrDiv.innerHTML = '<div class="text-red-400 text-xs p-2">Ошибка генерации QR: ' + e.message + '</div>';
+      return;
+    }
     downloadBtn.onclick = () => {
       const canvas = qrDiv.querySelector('canvas');
-      if (!canvas) { showToast('Не удалось получить QR canvas', 'error'); return; }
-      canvas.toBlob((blob) => {
-        if (!blob) { showToast('Не удалось сгенерировать PNG', 'error'); return; }
-        const url = URL.createObjectURL(blob);
+      const img = qrDiv.querySelector('img');
+      if (canvas) {
+        canvas.toBlob((blob) => {
+          if (!blob) { showToast('Не удалось сгенерировать PNG', 'error'); return; }
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = 'olcrtc-qr.png'; a.click();
+          URL.revokeObjectURL(url);
+          showToast('PNG сохранён');
+        }, 'image/png');
+      } else if (img) {
         const a = document.createElement('a');
-        a.href = url; a.download = 'olcrtc-qr.png'; a.click();
-        URL.revokeObjectURL(url);
+        a.href = img.src; a.download = 'olcrtc-qr.png'; a.click();
         showToast('PNG сохранён');
-      }, 'image/png');
+      } else {
+        showToast('Не удалось получить QR', 'error');
+      }
     };
-  }, 0);
+  }, 50);
+}
+
+function showCreateInstanceModal() {
+  const div = el('div', '');
+  const titleRow = el('div', 'flex items-center gap-2 mb-4');
+  titleRow.innerHTML = '<span style="color: var(--color-primary)">' + icon('plus', 18) + '</span><h3 class="text-lg font-semibold">Создать инстанс</h3>';
+  div.appendChild(titleRow);
+
+  const connectionSec = el('div', 'section mb-3');
+  const connTitle = el('div', 'section-title flex items-center gap-1.5');
+  connTitle.innerHTML = icon('wifi', 12) + '<span>Connection</span>';
+  connectionSec.appendChild(connTitle);
+  const connGrid = el('div', 'grid grid-cols-1 md:grid-cols-2 gap-3');
+
+  const carrierField = makeSelectField('Провайдер', icon('tag', 14), 'jitsi', ['jitsi', 'telemost', 'wbstream']);
+  const transportField = makeSelectField('Транспорт', icon('wifi', 14), 'datachannel', ['datachannel', 'vp8channel', 'seichannel', 'videochannel']);
+  const nameField = makeInputField('Имя', icon('tag', 14), 'jitsi_olcrtc', { placeholder: 'имя инстанса' });
+  const roomIDField = makeInputField('Room ID', icon('tag', 14), '', { placeholder: 'jitsi: https://meet1.arbitr.ru/yourroom · wbstream: создать на stream.wb.ru' });
+
+  connGrid.appendChild(carrierField.field);
+  connGrid.appendChild(transportField.field);
+  connGrid.appendChild(nameField.field);
+  connGrid.appendChild(roomIDField.field);
+  connectionSec.appendChild(connGrid);
+
+  const dcWarn = el('div', 'p-2 mb-3 text-xs rounded border border-red-500/50 bg-red-500/10 text-red-200 hidden');
+  dcWarn.innerHTML = '<strong>Внимание:</strong> DataChannel может не работать с данным carrier. Рекомендуется <b>vp8channel</b>.';
+  connectionSec.appendChild(dcWarn);
+
+  const wbHint = el('div', 'mb-3 text-xs text-amber-300 bg-amber-900/30 border border-amber-700/40 p-3 rounded-lg hidden');
+  wbHint.innerHTML = '<b>WB Stream больше не создаёт румы автоматически.</b> Создайте руму на <a href="https://stream.wb.ru" target="_blank" rel="noopener" class="underline">stream.wb.ru</a> и вставьте её ID в поле <b>Room ID</b>.';
+  connectionSec.appendChild(wbHint);
+
+  const jitsiPresets = el('div', 'mb-3 text-xs text-gray-400 hidden flex flex-wrap items-center gap-2');
+  jitsiPresets.innerHTML = '<span>Jitsi server:</span>'
+    + '<button type="button" data-host="meet1.arbitr.ru" class="px-2 py-0.5 rounded border" style="border-color: var(--color-hairline); transition: all 0.15s;">meet1.arbitr.ru</button>'
+    + '<button type="button" data-host="meet.jit.si" class="px-2 py-0.5 rounded border" style="border-color: var(--color-hairline); transition: all 0.15s;">meet.jit.si</button>'
+    + '<button type="button" data-host="meet.cryptopro.ru" class="px-2 py-0.5 rounded border" style="border-color: var(--color-hairline); transition: all 0.15s;">meet.cryptopro.ru</button>'
+    + '<span class="text-gray-500">(клик подставит/заменит хост в Room ID)</span>';
+  jitsiPresets.querySelectorAll('button[data-host]').forEach((btn) => {
+    btn.addEventListener('mouseenter', () => {
+      btn.style.borderColor = 'var(--color-primary)';
+      btn.style.color = 'var(--color-primary)';
+    });
+    btn.addEventListener('mouseleave', () => {
+      btn.style.borderColor = 'var(--color-hairline)';
+      btn.style.color = '';
+    });
+    btn.addEventListener('click', () => {
+      const host = btn.dataset.host;
+      const current = roomIDField.input.value.trim();
+      // If current value looks like a URL, swap the host. Otherwise prefill template.
+      const m = current.match(/^https?:\/\/[^\/]+(\/.*)?$/);
+      if (m) {
+        const tail = m[1] || '/';
+        roomIDField.input.value = 'https://' + host + tail;
+      } else if (current && !current.includes('/')) {
+        // Looks like just a room name — promote to full URL.
+        roomIDField.input.value = 'https://' + host + '/' + current;
+      } else {
+        roomIDField.input.value = 'https://' + host + '/';
+      }
+      roomIDField.input.focus();
+    });
+  });
+  connectionSec.appendChild(jitsiPresets);
+
+  div.appendChild(connectionSec);
+
+  // VP8 params
+  const vp8Block = el('div', 'border border-gray-700 rounded-lg p-3 mb-3');
+  vp8Block.innerHTML = '<div class="text-xs text-gray-400 mb-2">VP8 параметры</div>';
+  const vp8Grid = el('div', 'grid grid-cols-2 gap-2');
+  const vp8FpsInp = el('input', ''); vp8FpsInp.placeholder = 'FPS (120)'; vp8FpsInp.value = '120';
+  const vp8BatchInp = el('input', ''); vp8BatchInp.placeholder = 'Batch (64)'; vp8BatchInp.value = '64';
+  vp8Grid.appendChild(vp8FpsInp);
+  vp8Grid.appendChild(vp8BatchInp);
+  vp8Block.appendChild(vp8Grid);
+  div.appendChild(vp8Block);
+
+  // Network section: DNS / SOCKS / WARP
+  const netSec = el('div', 'section mb-3');
+  const netTitle = el('div', 'section-title flex items-center gap-1.5');
+  netTitle.innerHTML = icon('shield', 12) + '<span>Сеть</span>';
+  netSec.appendChild(netTitle);
+  const netGrid = el('div', 'grid grid-cols-1 md:grid-cols-3 gap-3');
+  const dnsField = makeInputField('DNS', icon('wifi', 14), '', { placeholder: '8.8.8.8:53' });
+  const socksField = makeInputField('SOCKS proxy', icon('shield', 14), '', { placeholder: 'socks5://user:pass@host:port' });
+  const warpField = makeInputField('WARP proxy', icon('shield', 14), '', { placeholder: '127.0.0.1:40000' });
+  netGrid.appendChild(dnsField.field);
+  netGrid.appendChild(socksField.field);
+  netGrid.appendChild(warpField.field);
+  netSec.appendChild(netGrid);
+  div.appendChild(netSec);
+
+  function getTransportOptionsForCreate(carrier) {
+    // Всегда возвращаем все транспорты
+    return ['datachannel', 'vp8channel', 'seichannel', 'videochannel'];
+  }
+
+  function isTransportCompatibleForCreate(carrier, transport) {
+    if (carrier === 'jitsi') {
+      return true;
+    } else if (carrier === 'telemost') {
+      return transport === 'vp8channel' || transport === 'videochannel';
+    } else if (carrier === 'wbstream') {
+      return transport === 'vp8channel' || transport === 'seichannel' || transport === 'videochannel';
+    }
+    return true;
+  }
+
+  function updateVisibility() {
+    const t = transportField.input.value;
+    const c = carrierField.input.value;
+
+    // Update available transports with warnings
+    const allTransports = getTransportOptionsForCreate(c);
+    const currentTransport = transportField.input.value;
+
+    // Rebuild transport select with warnings
+    transportField.input.innerHTML = '';
+    allTransports.forEach(tr => {
+      const opt = el('option', '', tr);
+      opt.value = tr;
+      if (!isTransportCompatibleForCreate(c, tr)) {
+        opt.textContent = tr + ' ⚠️ (несовместим)';
+        opt.style.color = '#f59e0b';
+      }
+      transportField.input.appendChild(opt);
+    });
+
+    // Restore selection
+    if (allTransports.includes(currentTransport)) {
+      transportField.input.value = currentTransport;
+    }
+
+    const finalTransport = transportField.input.value;
+    const isCompatible = isTransportCompatibleForCreate(c, finalTransport);
+
+    vp8Block.classList.toggle('hidden', finalTransport !== 'vp8channel');
+    dcWarn.classList.toggle('hidden', isCompatible || finalTransport !== 'datachannel');
+    wbHint.classList.toggle('hidden', c !== 'wbstream');
+    jitsiPresets.classList.toggle('hidden', c !== 'jitsi');
+
+    // Auto-rename
+    const carriers = { jitsi: 'jitsi', telemost: 'telemost', wbstream: 'wbstream' };
+    const cp = carriers[c] || c;
+    nameField.input.value = cp + '_olcrtc' + (finalTransport && finalTransport !== 'vp8channel' ? '_' + finalTransport : '');
+  }
+  carrierField.input.addEventListener('change', updateVisibility);
+  transportField.input.addEventListener('change', updateVisibility);
+
+  // Footer
+  const btnRow = el('div', 'flex gap-2 justify-end mt-2');
+  const cancelBtn = el('button', 'btn btn-secondary');
+  cancelBtn.textContent = 'Отмена';
+  const createBtn = el('button', 'btn btn-primary');
+  createBtn.textContent = 'Создать инстанс';
+  btnRow.appendChild(cancelBtn);
+  btnRow.appendChild(createBtn);
+  div.appendChild(btnRow);
+
+  const overlay = showModal(div);
+  cancelBtn.onclick = () => closeModal(overlay);
+  createBtn.onclick = async () => {
+    const carrier = carrierField.input.value;
+    const room = roomIDField.input.value.trim();
+    if (carrier === 'wbstream' && !room) {
+      showToast('Для wbstream нужно указать Room ID', 'error');
+      return;
+    }
+    const body = {
+      carrier,
+      transport: transportField.input.value,
+      name: nameField.input.value,
+      room_id: room,
+      vp8_fps: parseInt(vp8FpsInp.value, 10) || 120,
+      vp8_batch: parseInt(vp8BatchInp.value, 10) || 64,
+      dns: dnsField.input.value.trim(),
+      socks_proxy: socksField.input.value.trim(),
+      warp_proxy: warpField.input.value.trim(),
+    };
+    await withLoading(createBtn, async () => {
+      try {
+        await api('/instances', { method: 'POST', body: JSON.stringify(body) });
+        showToast('Инстанс создан');
+        closeModal(overlay);
+        render();
+      } catch (e) { showToast('Не удалось создать инстанс: ' + e.message, 'error'); }
+    });
+  };
 }
 
 // ── Instance config modal ────────────────────────────────────────────────────
 function showConfigModal(inst) {
   const div = el('div', '');
   const titleRow = el('div', 'flex items-center gap-2 mb-4');
-  titleRow.innerHTML = '<span class="text-emerald-400">' + icon('sliders', 18) + '</span><h3 class="text-lg font-semibold">Настройка инстанса #' + inst.id + '</h3>';
+  titleRow.innerHTML = '<span style="color: var(--color-primary)">' + icon('sliders', 18) + '</span><h3 class="text-lg font-semibold">Настройка инстанса #' + inst.id + '</h3>';
   div.appendChild(titleRow);
 
   // ── Connection section ──
@@ -776,10 +1190,10 @@ function showConfigModal(inst) {
   connectionSec.appendChild(connTitle);
   const connGrid = el('div', 'grid grid-cols-1 md:grid-cols-2 gap-3');
 
-  const carrierField = makeSelectField('Carrier', icon('tag', 14), inst.carrier || 'jitsi', ['jitsi', 'telemost', 'wbstream']);
-  const transportField = makeSelectField('Transport', icon('wifi', 14), inst.transport || 'datachannel', ['datachannel', 'vp8channel', 'seichannel']);
+  const carrierField = makeSelectField('Провайдер', icon('tag', 14), inst.carrier || 'jitsi', ['jitsi', 'telemost', 'wbstream']);
+  const transportField = makeSelectField('Транспорт', icon('wifi', 14), inst.transport || 'vp8channel', getTransportOptions(inst.carrier || 'jitsi'));
   const nameField = makeInputField('Имя', icon('tag', 14), inst.name || '', { placeholder: 'имя инстанса' });
-  const roomIDField = makeInputField('Room ID', icon('tag', 14), inst.room_id || '', { placeholder: 'для wbstream — создать на stream.wb.ru' });
+  const roomIDField = makeInputField('Room ID', icon('tag', 14), inst.room_id || '', { placeholder: 'jitsi: https://meet1.arbitr.ru/yourroom · wbstream: создать на stream.wb.ru' });
   const clientIDWrap = makeReadonlyWithRotate('Client ID', icon('shield', 14), inst.client_id || '(не задан)', async (rotateBtn) => {
     const ok = await showConfirm({
       title: 'Ротация Client ID?',
@@ -892,8 +1306,8 @@ function showConfigModal(inst) {
   const vp8Block = el('div', 'border border-gray-700 rounded-lg p-3 mb-3 hidden');
   vp8Block.innerHTML = '<div class="text-xs text-gray-400 mb-2">VP8 параметры</div>';
   const vp8Grid = el('div', 'grid grid-cols-2 gap-2');
-  const vp8FpsInp = el('input', ''); vp8FpsInp.placeholder = 'FPS (30)';
-  const vp8BatchInp = el('input', ''); vp8BatchInp.placeholder = 'Batch (2)';
+  const vp8FpsInp = el('input', ''); vp8FpsInp.placeholder = 'FPS (120)'; vp8FpsInp.value = inst.vp8_fps || '120';
+  const vp8BatchInp = el('input', ''); vp8BatchInp.placeholder = 'Batch (64)'; vp8BatchInp.value = inst.vp8_batch || '64';
   vp8Grid.appendChild(vp8FpsInp);
   vp8Grid.appendChild(vp8BatchInp);
   vp8Block.appendChild(vp8Grid);
@@ -927,18 +1341,119 @@ function showConfigModal(inst) {
   wbHint.innerHTML = '<b>WB Stream больше не создаёт румы автоматически.</b> Создайте руму на <a href="https://stream.wb.ru" target="_blank" rel="noopener" class="underline">stream.wb.ru</a> и вставьте её ID в поле <b>Room ID</b>.';
   div.appendChild(wbHint);
 
+  // Jitsi server presets (shown only when carrier=jitsi)
+  const jitsiPresets = el('div', 'mb-3 text-xs text-gray-400 hidden flex flex-wrap items-center gap-2');
+  jitsiPresets.innerHTML = '<span>Jitsi server:</span>'
+    + '<button type="button" data-host="meet1.arbitr.ru" class="px-2 py-0.5 rounded border" style="border-color: var(--color-hairline); transition: all 0.15s;">meet1.arbitr.ru</button>'
+    + '<button type="button" data-host="meet.jit.si" class="px-2 py-0.5 rounded border" style="border-color: var(--color-hairline); transition: all 0.15s;">meet.jit.si</button>'
+    + '<button type="button" data-host="meet.cryptopro.ru" class="px-2 py-0.5 rounded border" style="border-color: var(--color-hairline); transition: all 0.15s;">meet.cryptopro.ru</button>'
+    + '<span class="text-gray-500">(клик меняет хост в Room ID)</span>';
+  jitsiPresets.querySelectorAll('button[data-host]').forEach((btn) => {
+    btn.addEventListener('mouseenter', () => {
+      btn.style.borderColor = 'var(--color-primary)';
+      btn.style.color = 'var(--color-primary)';
+    });
+    btn.addEventListener('mouseleave', () => {
+      btn.style.borderColor = 'var(--color-hairline)';
+      btn.style.color = '';
+    });
+    btn.addEventListener('click', () => {
+      const host = btn.dataset.host;
+      const current = roomIDField.input.value.trim();
+      const m = current.match(/^https?:\/\/[^\/]+(\/.*)?$/);
+      if (m) {
+        const tail = m[1] || '/';
+        roomIDField.input.value = 'https://' + host + tail;
+      } else if (current && !current.includes('/')) {
+        roomIDField.input.value = 'https://' + host + '/' + current;
+      } else {
+        roomIDField.input.value = 'https://' + host + '/';
+      }
+      roomIDField.input.focus();
+    });
+  });
+  div.appendChild(jitsiPresets);
+
   // Conditional visibility
+  function getTransportOptions(carrier) {
+    // Всегда возвращаем все транспорты, но помечаем несовместимые
+    return ['datachannel', 'vp8channel', 'seichannel', 'videochannel'];
+  }
+
+  function isTransportCompatible(carrier, transport) {
+    // Проверка совместимости carrier/transport
+    if (carrier === 'jitsi') {
+      return true; // jitsi поддерживает все транспорты
+    } else if (carrier === 'telemost') {
+      return transport === 'vp8channel' || transport === 'videochannel';
+    } else if (carrier === 'wbstream') {
+      return transport === 'vp8channel' || transport === 'seichannel' || transport === 'videochannel';
+    }
+    return true;
+  }
+
+  function updateTransportOptions() {
+    const c = carrierField.input.value;
+    const currentTransport = transportField.input.value;
+
+    // Rebuild transport select options with warnings
+    transportField.input.innerHTML = '';
+    const allTransports = ['datachannel', 'vp8channel', 'seichannel', 'videochannel'];
+    allTransports.forEach(t => {
+      const opt = el('option', '', t);
+      opt.value = t;
+      if (!isTransportCompatible(c, t)) {
+        opt.textContent = t + ' ⚠️ (несовместим)';
+        opt.style.color = '#f59e0b';
+      }
+      transportField.input.appendChild(opt);
+    });
+
+    // Restore current selection
+    if (allTransports.includes(currentTransport)) {
+      transportField.input.value = currentTransport;
+    }
+
+    // Auto-rename instance when carrier changes
+    const curName = nameField.input.value;
+    const carriers = { jitsi: 'jitsi', telemost: 'telemost', wbstream: 'wbstream' };
+    const carrierPrefix = carriers[c] || c;
+    // If current name matches a known carrier pattern, update it
+    if (/^(jitsi|telemost|wbstream)_olcrtc/.test(curName) || curName === '') {
+      const t = transportField.input.value;
+      nameField.input.value = carrierPrefix + '_olcrtc' + (t && t !== 'vp8channel' ? '_' + t : '');
+    }
+    updateVisibility();
+  }
+  function updateNameFromTransport() {
+    const c = carrierField.input.value;
+    const t = transportField.input.value;
+    const carriers = { jitsi: 'jitsi', telemost: 'telemost', wbstream: 'wbstream' };
+    const carrierPrefix = carriers[c] || c;
+    const curName = nameField.input.value;
+    if (/^(jitsi|telemost|wbstream)_olcrtc/.test(curName) || curName === '') {
+      nameField.input.value = carrierPrefix + '_olcrtc' + (t && t !== 'vp8channel' ? '_' + t : '');
+    }
+    updateVisibility();
+  }
+  // datachannel warning
+  const dcWarn = el('div', 'p-2 mb-3 text-xs rounded border border-red-500/50 bg-red-500/10 text-red-200 hidden');
+  dcWarn.innerHTML = '<strong>Внимание:</strong> DataChannel не работает с данным провайдером. Используйте <b>vp8channel</b>.';
+  div.appendChild(dcWarn);
   function updateVisibility() {
     const t = transportField.input.value;
     const c = carrierField.input.value;
     vp8Block.classList.toggle('hidden', t !== 'vp8channel');
     seiBlock.classList.toggle('hidden', t !== 'seichannel');
     wbHint.classList.toggle('hidden', c !== 'wbstream');
+    jitsiPresets.classList.toggle('hidden', c !== 'jitsi');
     roomRotateBtn.disabled = (c === 'wbstream');
     roomRotateBtn.title = (c === 'wbstream') ? 'WB Stream отключил автосоздание румы' : '';
+    // Show datachannel warning only for non-jitsi carriers
+    dcWarn.classList.toggle('hidden', !(t === 'datachannel' && c !== 'jitsi'));
   }
-  carrierField.input.addEventListener('change', updateVisibility);
-  transportField.input.addEventListener('change', updateVisibility);
+  carrierField.input.addEventListener('change', () => { updateTransportOptions(); });
+  transportField.input.addEventListener('change', () => { updateNameFromTransport(); });
   updateVisibility();
 
   // Footer actions
@@ -1283,6 +1798,262 @@ function showImportSubModal() {
   };
 }
 
+// ── Update overlay ───────────────────────────────────────────────────────────
+const UPDATE_STEPS = [
+  { id: 'download',    label: 'Скачивание бинарников',  phases: ['queued', 'starting', 'downloading_server', 'downloading_admin', 'verifying'] },
+  { id: 'stopping',    label: 'Остановка сервисов',     phases: ['stopping'] },
+  { id: 'replacing',   label: 'Замена бинарников',      phases: ['replacing'] },
+  { id: 'starting',    label: 'Запуск сервера и админки', phases: ['starting_server', 'starting_admin'] },
+  { id: 'ready',       label: 'Готовность к работе',    phases: ['completed'] },
+];
+
+function phaseToStepIndex(phase) {
+  for (let i = 0; i < UPDATE_STEPS.length; i++) {
+    if (UPDATE_STEPS[i].phases.includes(phase)) return i;
+  }
+  return -1;
+}
+
+function showUpdateOverlay(targetVersion) {
+  const existing = document.getElementById('update-overlay');
+  if (existing) existing.remove();
+
+  const overlay = el('div', '');
+  overlay.id = 'update-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(1,1,2,0.95);backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;z-index:9999;animation:fadeIn 0.3s ease-out;';
+
+  const content = el('div', '');
+  content.style.cssText = 'text-align:center;max-width:520px;padding:48px 32px;width:100%;';
+
+  const spinnerWrap = el('div', '');
+  spinnerWrap.style.cssText = 'margin-bottom:28px;display:flex;justify-content:center;';
+  spinnerWrap.innerHTML = '<div id="update-spinner" style="width:64px;height:64px;border:4px solid var(--color-hairline);border-top-color:var(--color-primary);border-radius:50%;animation:spin 1s linear infinite;"></div>';
+
+  const title = el('h2', '');
+  title.style.cssText = 'font-size:28px;font-weight:600;letter-spacing:-0.6px;color:var(--color-ink);margin-bottom:10px;';
+  title.textContent = 'Обновление сервера';
+
+  const subtitle = el('p', '');
+  subtitle.style.cssText = 'font-size:15px;color:var(--color-ink-muted);margin-bottom:28px;line-height:1.5;';
+  subtitle.textContent = 'Устанавливается версия v' + targetVersion;
+
+  const stepsList = el('div', '');
+  stepsList.id = 'update-steps';
+  stepsList.style.cssText = 'text-align:left;background:rgba(255,255,255,0.03);border:1px solid var(--color-hairline);border-radius:12px;padding:16px 20px;margin-bottom:20px;';
+  UPDATE_STEPS.forEach((step, idx) => {
+    const row = el('div', '');
+    row.id = 'update-step-' + step.id;
+    row.style.cssText = 'display:flex;align-items:center;gap:12px;padding:8px 0;font-size:14px;color:var(--color-ink-subtle);';
+    const marker = el('div', '');
+    marker.className = 'update-step-marker';
+    marker.style.cssText = 'width:20px;height:20px;border-radius:50%;border:2px solid var(--color-hairline);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--color-ink-tertiary);transition:all 0.3s;';
+    marker.textContent = String(idx + 1);
+    const label = el('span', '');
+    label.className = 'update-step-label';
+    label.textContent = step.label;
+    row.appendChild(marker);
+    row.appendChild(label);
+    stepsList.appendChild(row);
+  });
+
+  const status = el('div', '');
+  status.id = 'update-status';
+  status.style.cssText = 'font-size:13px;color:var(--color-ink-subtle);margin-bottom:8px;font-family:ui-monospace,monospace;min-height:18px;';
+  status.textContent = 'Подготовка...';
+
+  const progressBar = el('div', '');
+  progressBar.style.cssText = 'width:100%;height:4px;background:var(--color-hairline);border-radius:2px;margin-top:8px;overflow:hidden;';
+  const progressFill = el('div', '');
+  progressFill.id = 'update-progress';
+  progressFill.style.cssText = 'height:100%;background:var(--color-primary);width:1%;transition:width 0.6s ease;';
+  progressBar.appendChild(progressFill);
+
+  const meta = el('div', '');
+  meta.style.cssText = 'display:flex;justify-content:space-between;font-size:12px;color:var(--color-ink-tertiary);margin-top:12px;';
+  const elapsedEl = el('span', ''); elapsedEl.id = 'update-elapsed'; elapsedEl.textContent = 'Прошло: 0s';
+  const percentEl = el('span', ''); percentEl.id = 'update-percent'; percentEl.textContent = '1%';
+  meta.appendChild(elapsedEl);
+  meta.appendChild(percentEl);
+
+  content.appendChild(spinnerWrap);
+  content.appendChild(title);
+  content.appendChild(subtitle);
+  content.appendChild(stepsList);
+  content.appendChild(status);
+  content.appendChild(progressBar);
+  content.appendChild(meta);
+  overlay.appendChild(content);
+  document.body.appendChild(overlay);
+
+  const startTime = Date.now();
+  let lastPhase = 'queued';
+  let lastMessage = 'Подготовка обновления...';
+  let lastPercent = 1;
+  let adminWentDown = false;
+  let finishing = false;
+
+  function applyStepIndex(activeIdx) {
+    UPDATE_STEPS.forEach((step, idx) => {
+      const row = document.getElementById('update-step-' + step.id);
+      if (!row) return;
+      const marker = row.querySelector('.update-step-marker');
+      if (idx < activeIdx) {
+        marker.style.borderColor = 'var(--color-success, #22c55e)';
+        marker.style.background = 'var(--color-success, #22c55e)';
+        marker.style.color = '#fff';
+        marker.textContent = '✓';
+        row.style.color = 'var(--color-ink)';
+      } else if (idx === activeIdx) {
+        marker.style.borderColor = 'var(--color-primary)';
+        marker.style.background = 'var(--color-primary)';
+        marker.style.color = '#fff';
+        marker.textContent = String(idx + 1);
+        row.style.color = 'var(--color-ink)';
+      } else {
+        marker.style.borderColor = 'var(--color-hairline)';
+        marker.style.background = 'transparent';
+        marker.style.color = 'var(--color-ink-tertiary)';
+        marker.textContent = String(idx + 1);
+        row.style.color = 'var(--color-ink-subtle)';
+      }
+    });
+  }
+
+  function applyState(phase, message, percent, adminDown) {
+    const stepIdx = phaseToStepIndex(phase);
+    if (stepIdx >= 0) applyStepIndex(stepIdx);
+    if (typeof percent === 'number' && percent >= lastPercent) {
+      lastPercent = percent;
+      progressFill.style.width = percent + '%';
+      percentEl.textContent = percent + '%';
+    }
+    if (adminDown) {
+      status.textContent = (message || lastMessage) + ' (админка перезапускается...)';
+    } else {
+      status.textContent = message || lastMessage;
+    }
+  }
+
+  function fail(msg) {
+    finishing = true;
+    clearInterval(elapsedInterval);
+    clearInterval(pollInterval);
+    const spinner = document.getElementById('update-spinner');
+    if (spinner) {
+      spinner.style.animation = 'none';
+      spinner.style.borderColor = 'var(--color-danger, #ef4444)';
+      spinner.style.borderTopColor = 'var(--color-danger, #ef4444)';
+    }
+    title.textContent = 'Ошибка обновления';
+    status.textContent = msg;
+    status.style.color = 'var(--color-danger, #ef4444)';
+    const closeBtn = el('button', 'btn btn-secondary');
+    closeBtn.textContent = 'Закрыть';
+    closeBtn.style.cssText = 'margin-top:20px;';
+    closeBtn.onclick = () => overlay.remove();
+    content.appendChild(closeBtn);
+  }
+
+  function complete() {
+    if (finishing) return;
+    finishing = true;
+    applyStepIndex(UPDATE_STEPS.length); // all checked
+    progressFill.style.width = '100%';
+    percentEl.textContent = '100%';
+    status.textContent = 'Обновление завершено! Перезагрузка...';
+    clearInterval(elapsedInterval);
+    clearInterval(pollInterval);
+    setTimeout(() => { location.reload(); }, 1500);
+  }
+
+  const elapsedInterval = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    elapsedEl.textContent = 'Прошло: ' + elapsed + 's';
+  }, 1000);
+
+  async function pollOnce() {
+    if (finishing) return;
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+
+    // Try to read real progress from admin
+    let progressData = null;
+    let adminReachable = false;
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
+      const res = await fetch(API + '/system/update-progress', {
+        headers: creds ? { 'Authorization': 'Basic ' + btoa(creds.username + ':' + creds.password) } : {},
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        progressData = await res.json();
+        adminReachable = true;
+      }
+    } catch (e) {
+      adminWentDown = true;
+    }
+
+    if (progressData) {
+      lastPhase = progressData.phase || lastPhase;
+      lastMessage = progressData.message || lastMessage;
+      const percent = typeof progressData.percent === 'number' ? progressData.percent : lastPercent;
+      applyState(lastPhase, lastMessage, percent, false);
+
+      if (lastPhase === 'error') {
+        fail(lastMessage || 'Произошла ошибка во время обновления');
+        return;
+      }
+
+      // Real "completed" from script — verify admin actually serves new version before reload
+      if (lastPhase === 'completed') {
+        try {
+          const sres = await fetch(API + '/system/status', {
+            headers: creds ? { 'Authorization': 'Basic ' + btoa(creds.username + ':' + creds.password) } : {},
+          });
+          if (sres.ok) {
+            const sd = await sres.json();
+            const v = (sd.version || '').replace(/^v/, '');
+            const t = (targetVersion || '').replace(/^v/, '');
+            if (v && v === t) { complete(); return; }
+            // version still old — admin is up but binary not yet swapped from its perspective
+            status.textContent = 'Завершение обновления... (версия: ' + (sd.version || 'неизвестно') + ')';
+          }
+        } catch (e) { /* ignore */ }
+      }
+    } else {
+      // Admin is unreachable — we're in stop/replace/restart window. Show last known phase.
+      // If we haven't seen any phase past "verifying", assume we just hit "stopping".
+      const lastIdx = phaseToStepIndex(lastPhase);
+      if (lastIdx <= 0 && elapsed > 5) {
+        // No state file yet but admin is down — assume stopping
+        applyState('stopping', 'Остановка сервисов...', Math.max(lastPercent, 45), true);
+      } else if (lastIdx === 1) {
+        // We were at "stopping", now admin is gone — likely "replacing"
+        applyState('replacing', 'Замена бинарников...', Math.max(lastPercent, 60), true);
+      } else {
+        applyState(lastPhase, lastMessage, lastPercent, true);
+      }
+    }
+
+    // Safety net: reload after 3 minutes regardless
+    if (elapsed > 180) {
+      status.textContent = 'Время ожидания истекло. Перезагрузка...';
+      clearInterval(elapsedInterval);
+      clearInterval(pollInterval);
+      setTimeout(() => { location.reload(); }, 1500);
+    }
+  }
+
+  // Initial poll immediately, then every 1.5s
+  pollOnce();
+  const pollInterval = setInterval(pollOnce, 1500);
+}
+
 // ── Init ─────────────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', render);
+document.addEventListener('DOMContentLoaded', () => {
+  // Initialize theme
+  setTheme(getTheme());
+  render();
+});
 })();

@@ -289,22 +289,94 @@ func (s *Session) Capabilities() engine.Capabilities {
 	return engine.Capabilities{ByteStream: true, VideoTrack: true}
 }
 
-// Connect joins the Jitsi conference, optionally opens the bridge channel,
-// and (if video tracks are pending or a remote handler is set) negotiates a
-// pion PeerConnection.
+// Connect joins the Jitsi MUC (non-blocking) and waits for the Jingle
+// session-initiate asynchronously. This avoids blocking on the timeout when
+// no second participant is present — Jicofo only sends session-initiate once
+// another peer joins the room.
 func (s *Session) Connect(ctx context.Context) error {
 	if s.closed.Load() {
 		return ErrSessionClosed
 	}
 
-	jSess, err := s.joinAndOpenBridge(ctx)
+	logger.Infof("jitsi: joining MUC %s/%s as %s …", s.host, s.room, s.name)
+	jSess, err := j.JoinMUC(ctx, j.Config{
+		Host:     s.host,
+		Room:     s.room,
+		Nick:     s.name,
+		Debug:    logger.IsVerbose(),
+		Insecure: s.insecure,
+	})
 	if err != nil {
-		return err
+		return fmt.Errorf("jitsi join muc: %w", err)
 	}
 	s.jSess.Store(jSess)
+	logger.Infof("jitsi: MUC joined %s/%s; waiting for peer …", s.host, s.room)
 
-	s.wg.Add(2)
+	s.wg.Add(4)
 	go s.sendLoop()
+	go s.recvLoop()
+	go s.waitForJingle()
+	go s.bridgeKeepalive()
+	return nil
+}
+
+// waitForJingle waits for Jicofo to send session-initiate (when a peer joins)
+// and then opens the bridge channel and negotiates the PeerConnection.
+func (s *Session) waitForJingle() {
+	defer s.wg.Done()
+
+	jSess := s.jSess.Load()
+	if jSess == nil {
+		return
+	}
+
+	stanza, err := jSess.Conn.WaitJingle(s.runCtx)
+	if err != nil {
+		if s.closed.Load() || s.runCtx.Err() != nil {
+			return
+		}
+		logger.Warnf("jitsi: wait jingle failed: %v", err)
+		return
+	}
+	_ = stanza // parsed below via joinAndOpenBridge path
+
+	// Now do the full join (which will get the already-received jingle from LastJingleStanza).
+	if err := s.completeJingleSetup(s.runCtx, jSess); err != nil {
+		if !s.closed.Load() {
+			logger.Warnf("jitsi: jingle setup failed: %v", err)
+			s.requestReconnect("jingle setup failed")
+		}
+	}
+}
+
+// completeJingleSetup opens the bridge and negotiates the PeerConnection after
+// receiving session-initiate from Jicofo.
+func (s *Session) completeJingleSetup(ctx context.Context, jSess *j.Session) error {
+	logger.Infof("jitsi: session-initiate received; colibri-ws=%s", jSess.ColibriWS)
+
+	needBridge := s.onData != nil || s.onPeerData != nil
+	sctpBridge := needBridge && jSess.ColibriWS == ""
+
+	if needBridge && !sctpBridge {
+		if err := s.openBridgeWS(ctx, jSess); err != nil {
+			return err
+		}
+	}
+
+	if s.shouldNegotiatePC() {
+		if err := s.negotiatePC(ctx, jSess, sctpBridge); err != nil {
+			return err
+		}
+	}
+
+	if sctpBridge {
+		if err := s.openBridgeSCTP(ctx, jSess); err != nil {
+			return err
+		}
+	}
+
+	// Restart recvLoop now that bridge is ready.
+	s.wg.Add(1)
 	go s.recvLoop()
 	return nil
 }
@@ -614,9 +686,11 @@ func (s *Session) negotiatePC(ctx context.Context, jSess *j.Session, sctpBridge 
 func (s *Session) rtcpKeepalive(pc *webrtc.PeerConnection) {
 	defer s.wg.Done()
 	const interval = 5 * time.Second
+	const maxErrors = 3
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	pkts := []rtcp.Packet{&rtcp.ReceiverReport{}}
+	errCount := 0
 	for {
 		select {
 		case <-s.done:
@@ -626,8 +700,46 @@ func (s *Session) rtcpKeepalive(pc *webrtc.PeerConnection) {
 				if s.closed.Load() {
 					return
 				}
-				logger.Debugf("jitsi: rtcp keepalive write: %v", err)
+				errCount++
+				logger.Debugf("jitsi: rtcp keepalive write (%d/%d): %v", errCount, maxErrors, err)
+				if errCount >= maxErrors {
+					logger.Warnf("jitsi: rtcp keepalive giving up after %d errors", maxErrors)
+					s.requestReconnect("rtcp keepalive dead")
+					return
+				}
+			} else {
+				errCount = 0
 			}
+		}
+	}
+}
+
+// bridgeKeepalive sends a lightweight colibri-ws message every 10 seconds so
+// JVB updates its endpoint lastActivity timestamp. Without this, JVB expires
+// the endpoint after its inactivity timeout (~30-60s) when the ICE/DTLS path
+// is routed through a TURN relay whose allocation silently dies.
+func (s *Session) bridgeKeepalive() {
+	defer s.wg.Done()
+	const interval = 10 * time.Second
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-s.done:
+			return
+		case <-ticker.C:
+			jSess := s.jSess.Load()
+			if jSess == nil {
+				continue
+			}
+			br := jSess.Bridge()
+			if br == nil {
+				continue
+			}
+			_ = br.SendJSON(map[string]any{
+				"colibriClass":    "PinnedEndpointsChangedEvent",
+				"pinnedEndpoints": []string{},
+			})
 		}
 	}
 }

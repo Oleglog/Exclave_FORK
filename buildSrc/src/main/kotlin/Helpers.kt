@@ -138,7 +138,7 @@ fun Project.setupAppCommon(projectName: String = "") {
                 isEnable = true
                 isUniversalApk = true
                 reset()
-                include("x86", "x86_64", "armeabi-v7a", "arm64-v8a")
+                include("armeabi-v7a", "arm64-v8a")
             }
         }
     }

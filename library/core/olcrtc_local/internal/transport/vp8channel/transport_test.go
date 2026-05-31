@@ -128,7 +128,7 @@ func TestBatchSampleCarriesMultipleKCPPackets(t *testing.T) {
 	tr.outbound <- packet("three")
 	tr.outbound <- packet("four")
 
-	sample := tr.batchSample(packet("one"))
+	sample := tr.batchSample(packet("one"), defaultMaxPayloadSize)
 	if !bytes.Equal(sample[:epochHdrLen], hdr[:]) {
 		t.Fatalf("sample epoch header = %x, want %x", sample[:epochHdrLen], hdr[:])
 	}
@@ -189,7 +189,7 @@ func TestHandleIncomingFrameIgnoresLoopedBackLocalEpoch(t *testing.T) {
 
 	tr.handleIncomingFrame(frame)
 
-	if tr.hadPeer.Load() {
+	if tr.peerConfirmed.Load() {
 		t.Fatal("self-echo frame must not mark peer as seen")
 	}
 	if got := tr.peerEpoch.Load(); got != 0 {
@@ -220,7 +220,7 @@ func TestHandleIncomingFrameIgnoresForeignBindingToken(t *testing.T) {
 
 	tr.handleIncomingFrame(frame)
 
-	if tr.hadPeer.Load() {
+	if tr.peerConfirmed.Load() {
 		t.Fatal("foreign frame must not mark peer as seen")
 	}
 	if got := tr.peerEpoch.Load(); got != 0 {

@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/dyhkwong/libsagernetcore v0.0.0-20260429200134-d0a86658ed4c
-	github.com/openlibrecommunity/olcrtc v0.0.0-20260530132006-67b0e2b74e1f
+	github.com/openlibrecommunity/olcrtc v0.0.0-20260601013820-b2f96eebc776
 )
 
 require (

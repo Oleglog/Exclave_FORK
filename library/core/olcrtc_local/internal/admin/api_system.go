@@ -54,7 +54,7 @@ func (s *Server) handleSystemStatus(w http.ResponseWriter, r *http.Request) {
 	vals := ReadInstanceEnv(mainEnv)
 
 	result := map[string]any{
-		"version":           "0.4.0",
+		"version":           Version,
 		"admin_version":     "0.1.0",
 		"hostname":          GetHostname(),
 		"public_ip":         s.cfg.PublicIP,
@@ -165,7 +165,7 @@ func (s *Server) bindDomain(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.cfg.Domain = req.Domain
-	if err := WriteAdminEnv(s.cfg.ConfigDir, s.cfg.Port, s.cfg.Token, req.Domain, s.cfg.SubPort); err != nil {
+	if err := WriteAdminEnv(s.cfg.ConfigDir, s.cfg.Port, s.cfg.Username, s.cfg.Password, req.Domain, s.cfg.SubPort); err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
@@ -180,7 +180,7 @@ func (s *Server) bindDomain(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) unbindDomain(w http.ResponseWriter, r *http.Request) {
 	s.cfg.Domain = ""
-	if err := WriteAdminEnv(s.cfg.ConfigDir, s.cfg.Port, s.cfg.Token, "", s.cfg.SubPort); err != nil {
+	if err := WriteAdminEnv(s.cfg.ConfigDir, s.cfg.Port, s.cfg.Username, s.cfg.Password, "", s.cfg.SubPort); err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
@@ -222,6 +222,7 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Not Found", http.StatusNotFound)
 			return
 		}
+		path = "/index.html"
 	}
 	contentType := "text/plain"
 	switch {
