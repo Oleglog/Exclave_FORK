@@ -58,7 +58,6 @@ func (s *Session) Connect(ctx context.Context) error {
 			return fmt.Errorf("connect context cancelled: %w", ctx.Err())
 		}
 	}
-
 	return s.waitForMediaReady(ctx, 20*time.Second)
 }
 

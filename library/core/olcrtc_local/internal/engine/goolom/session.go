@@ -35,10 +35,10 @@ const (
 	wsReadTimeout      = 60 * time.Second
 	wsHandshakeTimeout = 15 * time.Second
 
-	keyUID         = "uid"
-	keyDescription = "description"
-	keyPcSeq       = "pcSeq"
-	keyName        = "name"
+	keyUID          = "uid"
+	keyDescription  = "description"
+	keyPcSeq        = "pcSeq"
+	keyName         = "name"
 	stateTerminated = "terminated"
 
 	credentialKeyRoomID           = "roomID"
@@ -131,8 +131,7 @@ type Session struct {
 	subscriberConn  chan struct{}
 	publisherConn   chan struct{}
 	wg              sync.WaitGroup
-
-	httpClient *http.Client
+	httpClient      *http.Client
 }
 
 // New creates a new Goolom engine session.
