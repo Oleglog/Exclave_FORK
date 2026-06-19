@@ -110,7 +110,7 @@ func fetchLatestTag() (tag, url, source string, err error) {
 	if err == nil {
 		return tag, url, "api", nil
 	}
-	return "", "", "", fmt.Errorf("redirect: %v; api: %w", redirectErr, err)
+	return "", "", "", fmt.Errorf("redirect: %w; api: %w", redirectErr, err)
 }
 
 // fetchLatestTagViaRedirect resolves the latest release by reading the Location
@@ -119,7 +119,7 @@ func fetchLatestTag() (tag, url, source string, err error) {
 // API limit.
 func fetchLatestTagViaRedirect() (tagName, releaseURL string, err error) {
 	const url = "https://github.com/Oleglog/Olcrtc_manager/releases/latest"
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return "", "", err
 	}
@@ -161,7 +161,7 @@ func fetchLatestTagViaRedirect() (tagName, releaseURL string, err error) {
 }
 
 func fetchLatestTagViaAPI() (tagName, releaseURL string, err error) {
-	req, err := http.NewRequest("GET", "https://api.github.com/repos/Oleglog/Olcrtc_manager/releases/latest", nil)
+	req, err := http.NewRequest(http.MethodGet, "https://api.github.com/repos/Oleglog/Olcrtc_manager/releases/latest", nil)
 	if err != nil {
 		return "", "", err
 	}
@@ -375,7 +375,7 @@ echo "=== Update Completed at $(date) ==="
 	}
 
 	// Seed initial state so frontend sees progress immediately, before script runs.
-	initial := fmt.Sprintf(`{"phase":"queued","message":"Запуск процесса обновления...","percent":1,"target_version":"%s","updated_at":%d}`, version, time.Now().Unix())
+	initial := fmt.Sprintf(`{"phase":"queued","message":"Запуск процесса обновления...","percent":1,"target_version":%q,"updated_at":%d}`, version, time.Now().Unix())
 	_ = os.WriteFile(updateStateFile, []byte(initial), 0644)
 
 	// Send response BEFORE starting update
@@ -509,12 +509,12 @@ func fetchReleases() ([]releaseInfo, string, error) {
 	if err == nil {
 		return rels, "api", nil
 	}
-	return nil, "", fmt.Errorf("atom: %v; api: %w", atomErr, err)
+	return nil, "", fmt.Errorf("atom: %w; api: %w", atomErr, err)
 }
 
 func fetchReleasesViaAtom() ([]releaseInfo, error) {
 	const url = "https://github.com/Oleglog/Olcrtc_manager/releases.atom"
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -572,7 +572,7 @@ func fetchReleasesViaAtom() ([]releaseInfo, error) {
 }
 
 func fetchReleasesViaAPI() ([]releaseInfo, error) {
-	req, err := http.NewRequest("GET", "https://api.github.com/repos/Oleglog/Olcrtc_manager/releases?per_page=30", nil)
+	req, err := http.NewRequest(http.MethodGet, "https://api.github.com/repos/Oleglog/Olcrtc_manager/releases?per_page=30", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -623,7 +623,7 @@ func compareSemver(a, b string) int {
 	b = strings.TrimPrefix(b, "v")
 	aParts := strings.Split(a, ".")
 	bParts := strings.Split(b, ".")
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		var ai, bi int
 		if i < len(aParts) {
 			ai, _ = strconv.Atoi(aParts[i])

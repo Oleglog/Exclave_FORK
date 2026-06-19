@@ -134,12 +134,11 @@ type Session struct {
 	insecure   bool
 	bridgeMode string
 
-	onData              func([]byte)
-	onPeerData          func(peerID string, data []byte)
-	requireTargetedPeer bool
-	onReconnect         func(*webrtc.DataChannel)
-	shouldReconnect     func() bool
-	onEnded             func(string)
+	onData          func([]byte)
+	onPeerData      func(peerID string, data []byte)
+	onReconnect     func(*webrtc.DataChannel)
+	shouldReconnect func() bool
+	onEnded         func(string)
 
 	jSess atomic.Pointer[j.Session]
 
@@ -227,21 +226,20 @@ func New(_ context.Context, cfg engine.Config) (engine.Session, error) {
 
 	runCtx, cancel := context.WithCancel(context.Background())
 	s := &Session{
-		host:                host,
-		room:                room,
-		name:                name,
-		insecure:            insecure,
-		bridgeMode:          bridgeMode,
-		onData:              cfg.OnData,
-		onPeerData:          cfg.OnPeerData,
-		requireTargetedPeer: cfg.RequireTargetedPeer,
-		sendQueue:           make(chan []byte, defaultSendQueueSize),
-		peerSendQueue:       make(chan bridgeOutbound, defaultSendQueueSize),
-		peerEpochs:          make(map[string]uint32),
-		reconnectCh:         make(chan struct{}, 1),
-		done:                make(chan struct{}),
-		cancel:              cancel,
-		runCtx:              runCtx,
+		host:          host,
+		room:          room,
+		name:          name,
+		insecure:      insecure,
+		bridgeMode:    bridgeMode,
+		onData:        cfg.OnData,
+		onPeerData:    cfg.OnPeerData,
+		sendQueue:     make(chan []byte, defaultSendQueueSize),
+		peerSendQueue: make(chan bridgeOutbound, defaultSendQueueSize),
+		peerEpochs:    make(map[string]uint32),
+		reconnectCh:   make(chan struct{}, 1),
+		done:          make(chan struct{}),
+		cancel:        cancel,
+		runCtx:        runCtx,
 	}
 	s.localEpoch.Store(randomEpoch())
 	return s, nil
@@ -438,51 +436,6 @@ func (s *Session) completeJingleSetup(ctx context.Context, jSess *j.Session) err
 	s.wg.Add(1)
 	go s.recvLoop()
 	return nil
-}
-
-func (s *Session) joinAndOpenBridge(ctx context.Context) (*j.Session, error) {
-	logger.Infof("jitsi: joining %s/%s as %s …", s.host, s.room, s.name)
-	jSess, err := j.Join(ctx, j.Config{
-		Host:     s.host,
-		Room:     s.room,
-		Nick:     s.name,
-		Debug:    logger.IsVerbose(),
-		Insecure: s.insecure,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("jitsi join: %w", err)
-	}
-	s.logSessionDiagnostics("joined", jSess)
-
-	needBridge := s.onData != nil || s.onPeerData != nil
-	sctpBridge, err := s.decideBridgePath("join", needBridge, jSess)
-	if err != nil {
-		_ = jSess.Close()
-		return nil, err
-	}
-
-	if needBridge && !sctpBridge {
-		if err := s.openBridgeWS(ctx, jSess); err != nil {
-			_ = jSess.Close()
-			return nil, err
-		}
-	}
-
-	if s.shouldNegotiatePC() {
-		if err := s.negotiatePC(ctx, jSess, sctpBridge); err != nil {
-			_ = jSess.Close()
-			return nil, err
-		}
-	}
-
-	if sctpBridge {
-		if err := s.openBridgeSCTP(ctx, jSess); err != nil {
-			_ = jSess.Close()
-			return nil, err
-		}
-	}
-
-	return jSess, nil
 }
 
 func (s *Session) openBridgeWS(ctx context.Context, jSess *j.Session) error {
@@ -775,6 +728,11 @@ func (s *Session) negotiatePC(ctx context.Context, jSess *j.Session, sctpBridge 
 			})
 		case webrtc.PeerConnectionStateConnected:
 			failedAt.Store(0)
+		case webrtc.PeerConnectionStateUnknown,
+			webrtc.PeerConnectionStateNew,
+			webrtc.PeerConnectionStateConnecting,
+			webrtc.PeerConnectionStateDisconnected,
+			webrtc.PeerConnectionStateClosed:
 		}
 	})
 
@@ -1031,7 +989,7 @@ func (s *Session) xmppKeepalive() {
 			}
 			id := conn.NextID()
 			ping := fmt.Sprintf(
-				`<iq type="get" to="%s" id="%s" xmlns="jabber:client"><ping xmlns="urn:xmpp:ping"/></iq>`,
+				`<iq type="get" to=%q id=%q xmlns="jabber:client"><ping xmlns="urn:xmpp:ping"/></iq>`,
 				conn.Host(), id,
 			)
 			if err := conn.Send(ping); err != nil {
@@ -1438,11 +1396,11 @@ func (s *Session) deliverBridgeMessage(msg j.BridgeMessage, ok bool) bool {
 	if s.onPeerData != nil && msg.From != "" {
 		return s.deliverPeerBridgePayload(msg.From, payload)
 	}
-	data, ok := s.acceptEpochFrame(payload)
-	if !ok {
+	if !s.peerLatchAccepts(msg.From) {
 		return true
 	}
-	if !s.peerLatchAccepts(msg.From) {
+	data, ok := s.acceptEpochFrame(payload)
+	if !ok {
 		return true
 	}
 	if len(data) == 0 {
@@ -1476,14 +1434,11 @@ func (s *Session) deliverRawBridgeFrame(frame []byte, ok bool) bool {
 	if s.onPeerData != nil && msg.From != "" {
 		return s.deliverPeerBridgePayload(msg.From, payload)
 	}
-	data, ok := s.acceptEpochFrame(payload)
-	if !ok {
-		return true
-	}
 	if !s.peerLatchAccepts(msg.From) {
 		return true
 	}
-	if len(data) == 0 {
+	data, ok := s.acceptEpochFrame(payload)
+	if !ok || len(data) == 0 {
 		return true
 	}
 	s.onData(data)
@@ -1549,11 +1504,6 @@ func (s *Session) acceptEpochFrame(payload []byte) ([]byte, bool) {
 	if receiverEpoch != 0 && receiverEpoch != s.localEpoch.Load() {
 		logger.Debugf("jitsi: drop stale bridge frame peerEpoch=0x%08x localEpoch=0x%08x",
 			receiverEpoch, s.localEpoch.Load())
-		return nil, false
-	}
-	if s.requireTargetedPeer && s.onPeerData == nil && receiverEpoch != s.localEpoch.Load() {
-		logger.Debugf("jitsi: drop untargeted bridge frame senderEpoch=0x%08x localEpoch=0x%08x",
-			senderEpoch, s.localEpoch.Load())
 		return nil, false
 	}
 	// Epoch is a deduplication marker for stale frames during reconnect, not
@@ -1755,7 +1705,7 @@ func (s *Session) handleReconnectAttempt(ctx context.Context) bool {
 		s.reconnectMu.Lock()
 		failures := s.reconnectCount
 		s.reconnectMu.Unlock()
-		if failures > maxReconnects {
+		if failures >= maxReconnects {
 			s.signalEnded("jitsi reconnect limit reached")
 			return true
 		}
