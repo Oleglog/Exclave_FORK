@@ -53,6 +53,7 @@ class OLCRTCSettingsActivity : ProfileSettingsActivity<OLCRTCBean>() {
         DataStore.serverOlcrtcRoomId = roomId
         DataStore.serverOlcrtcRoomPassword = roomPassword.orEmpty()
         DataStore.serverOlcrtcClientId = clientId.orEmpty()
+        DataStore.serverOlcrtcAuthToken = authToken.orEmpty()
         DataStore.serverOlcrtcKeyHex = keyHex
         DataStore.serverOlcrtcDnsServer = dnsServer
         DataStore.serverOlcrtcVp8Fps = vp8Fps
@@ -75,6 +76,11 @@ class OLCRTCSettingsActivity : ProfileSettingsActivity<OLCRTCBean>() {
         // clientId is read-only in the UI, but we still round-trip through the
         // DataStore so the value survives configuration changes during edit.
         clientId = DataStore.serverOlcrtcClientId.orEmpty()
+        authToken = if (provider == OLCRTCBean.PROVIDER_WB_STREAM) {
+            DataStore.serverOlcrtcAuthToken.orEmpty()
+        } else {
+            ""
+        }
         keyHex = DataStore.serverOlcrtcKeyHex
         dnsServer = DataStore.serverOlcrtcDnsServer.ifEmpty { "77.88.8.8:53" }
         vp8Fps = DataStore.serverOlcrtcVp8Fps
@@ -136,6 +142,8 @@ class OLCRTCSettingsActivity : ProfileSettingsActivity<OLCRTCBean>() {
             PasswordSummaryProvider
         val roomPasswordPref = findPreference<EditTextPreference>(Key.SERVER_OLCRTC_ROOM_PASSWORD)
         roomPasswordPref?.summaryProvider = PasswordSummaryProvider
+        val authTokenPref = findPreference<EditTextPreference>(Key.SERVER_OLCRTC_AUTH_TOKEN)
+        authTokenPref?.summaryProvider = PasswordSummaryProvider
 
         // Provider drop-down toggles room-password visibility and updates the
         // transport summary on every change.
@@ -144,6 +152,7 @@ class OLCRTCSettingsActivity : ProfileSettingsActivity<OLCRTCBean>() {
 
         fun applyProviderVisibility(provider: String) {
             roomPasswordPref?.isVisible = provider == OLCRTCBean.PROVIDER_JITSI
+            authTokenPref?.isVisible = provider == OLCRTCBean.PROVIDER_WB_STREAM
         }
 
         fun applyTransportSummary(transport: String) {

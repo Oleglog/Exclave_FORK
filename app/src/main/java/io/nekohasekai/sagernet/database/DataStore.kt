@@ -399,6 +399,7 @@ object DataStore : OnPreferenceDataStoreChangeListener {
      * token; a mismatch silently drops VP8 RTP frames.
      */
     var serverOlcrtcClientId by profileCacheStore.string(Key.SERVER_OLCRTC_CLIENT_ID)
+    var serverOlcrtcAuthToken by profileCacheStore.string(Key.SERVER_OLCRTC_AUTH_TOKEN)
     var serverSingUot by profileCacheStore.boolean(Key.SERVER_SING_UOT)
     var serverSingMux by profileCacheStore.boolean(Key.SERVER_SING_MUX)
     var serverSingMuxProtocol by profileCacheStore.string(Key.SERVER_SING_MUX_PROTOCOL)

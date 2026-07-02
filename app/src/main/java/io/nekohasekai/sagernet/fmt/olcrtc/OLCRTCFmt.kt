@@ -41,6 +41,7 @@ fun parseOLCRTC(url: String): OLCRTCBean {
         // Server-issued client identifier; optional for backward compatibility
         // with URIs exported before the server-side S8 work landed.
         clientId = link.queryParameter("client_id") ?: ""
+        authToken = link.queryParameter("auth_token") ?: link.queryParameter("auth.token") ?: ""
         name = link.fragment ?: ""
 
         validate()
@@ -63,6 +64,9 @@ fun OLCRTCBean.toUri(): String {
         // re-shared without it stay backward compatible.
         if (!clientId.isNullOrEmpty()) {
             addQueryParameter("client_id", clientId)
+        }
+        if (provider == OLCRTCBean.PROVIDER_WB_STREAM && !authToken.isNullOrEmpty()) {
+            addQueryParameter("auth_token", authToken)
         }
         if (transport.isNotEmpty() && transport != OLCRTCBean.TRANSPORT_DATACHANNEL) {
             addQueryParameter("transport", transport)
@@ -98,6 +102,7 @@ fun parseOLCRTCJson(text: String): OLCRTCBean {
         roomId = json.optString("room_id", "")
         roomPassword = json.optString("room_password", "")
         clientId = json.optString("client_id", "")
+        authToken = json.optString("auth_token", "")
         keyHex = json.optString("key_hex", "")
         dnsServer = json.optString("dns_server", "77.88.8.8:53")
         vp8Fps = json.optInt("vp8_fps", 60).takeIf { it > 0 } ?: 60

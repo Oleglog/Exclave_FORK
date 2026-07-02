@@ -47,6 +47,13 @@
         <EditTextPreference
             app:dialogLayout="@layout/layout_password_dialog"
             app:icon="@drawable/ic_settings_password"
+            app:key="serverOlcrtcAuthToken"
+            app:summary="@string/olcrtc_auth_token_summary"
+            app:title="@string/olcrtc_auth_token" />
+
+        <EditTextPreference
+            app:dialogLayout="@layout/layout_password_dialog"
+            app:icon="@drawable/ic_settings_password"
             app:key="serverOlcrtcKeyHex"
             app:summary="@string/olcrtc_key_hex_summary"
             app:title="@string/olcrtc_key_hex" />

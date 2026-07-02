@@ -112,6 +112,7 @@ class OLCRTCExternalInstance(
 
         Mobile.setTransport(transport)
         Mobile.setDNS(bean.dnsServer.ifEmpty { "8.8.8.8:53" })
+        Mobile.setWBToken(bean.authToken.orEmpty())
 
         if (transport == OLCRTCBean.TRANSPORT_VP8CHANNEL) {
             Mobile.setVP8Options(

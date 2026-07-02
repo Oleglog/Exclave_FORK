@@ -270,6 +270,8 @@
     <string name="olcrtc_room_id_summary">Numeric room ID issued by your olcRTC server admin (the path part of e.g. https://telemost.yandex.ru/j/&lt;ID&gt;).</string>
     <string name="olcrtc_room_password">Room password</string>
     <string name="olcrtc_room_password_summary">Password for the Jitsi room. Required when the server enforces a room password (sent to auth/jitsi as &lt;roomID&gt;:&lt;password&gt;).</string>
+    <string name="olcrtc_auth_token">Auth token</string>
+    <string name="olcrtc_auth_token_summary">Optional WB Stream account/moderator token. Required for some rooms and datachannel publishing.</string>
     <string name="olcrtc_key_hex">Pre-shared key (hex)</string>
     <string name="olcrtc_key_hex_summary">64-character hexadecimal pre-shared key issued by the olcRTC server.</string>
     <string name="olcrtc_transport">Transport</string>

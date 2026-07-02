@@ -45,6 +45,7 @@ public class OLCRTCBean extends AbstractBean {
     public String roomId;
     public String roomPassword;
     public String clientId;
+    public String authToken;
     public String keyHex;
     public String dnsServer;
     public int vp8Fps;
@@ -61,6 +62,7 @@ public class OLCRTCBean extends AbstractBean {
         if (roomId == null) roomId = "";
         if (roomPassword == null) roomPassword = "";
         if (clientId == null) clientId = "";
+        if (authToken == null) authToken = "";
         if (keyHex == null) keyHex = "";
         if (dnsServer == null || dnsServer.isEmpty()) dnsServer = "77.88.8.8:53";
         if (vp8Fps <= 0) vp8Fps = 60;
@@ -70,7 +72,7 @@ public class OLCRTCBean extends AbstractBean {
 
     @Override
     public void serialize(ByteBufferOutput output) {
-        output.writeInt(4);
+        output.writeInt(5);
         super.serialize(output);
         output.writeString(provider);
         output.writeString(roomId);
@@ -86,6 +88,8 @@ public class OLCRTCBean extends AbstractBean {
         output.writeString(roomPassword == null ? "" : roomPassword);
         // v4 fields:
         output.writeString(clientId == null ? "" : clientId);
+        // v5 fields:
+        output.writeString(authToken == null ? "" : authToken);
     }
 
     @Override
@@ -113,6 +117,11 @@ public class OLCRTCBean extends AbstractBean {
             clientId = input.readString();
         } else {
             clientId = "";
+        }
+        if (version >= 5) {
+            authToken = input.readString();
+        } else {
+            authToken = "";
         }
     }
 

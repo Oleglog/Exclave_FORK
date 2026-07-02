@@ -267,6 +267,7 @@ object Key {
      * RTP binding token, so a mismatched clientID silently drops VP8 frames.
      */
     const val SERVER_OLCRTC_CLIENT_ID = "serverOlcrtcClientId"
+    const val SERVER_OLCRTC_AUTH_TOKEN = "serverOlcrtcAuthToken"
 
     const val SERVER_SING_UOT_CATEGORY = "serverSingUotCategory"
     const val SERVER_SING_MUX_CATEGORY = "serverSingMuxCategory"
