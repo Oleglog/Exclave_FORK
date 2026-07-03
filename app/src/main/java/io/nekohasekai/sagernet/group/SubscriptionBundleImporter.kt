@@ -53,7 +53,7 @@ object SubscriptionBundleImporter {
             name = name,
             type = GroupType.SUBSCRIPTION,
             subscription = SubscriptionBean().applyDefaultValues().apply {
-                type = SubscriptionType.RAW
+                this.type = SubscriptionType.RAW
                 link = subscriptionUrl
                 deduplication = obj.getBoolean("deduplication", ignoreCase = true) ?: true
                 updateWhenConnectedOnly = obj.getBoolean("update_when_connected_only", ignoreCase = true) ?: true
