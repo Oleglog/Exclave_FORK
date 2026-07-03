@@ -5,12 +5,12 @@
         <item name="actionModeCloseDrawable">@drawable/ic_navigation_close</item>
         <item name="colorButtonNormal">?colorAccent</item>
         <item name="android:navigationBarColor">?colorPrimaryDark</item>
-        <item name="colorPrimary">@color/material_pink_500</item>
-        <item name="colorPrimaryDark">@color/material_pink_700</item>
-        <item name="colorAccent">@color/material_pink_accent_200</item>
+        <item name="colorPrimary">@color/material_deep_purple_600</item>
+        <item name="colorPrimaryDark">@color/material_deep_purple_800</item>
+        <item name="colorAccent">@color/material_orange_accent_200</item>
 
-        <item name="colorMaterial100">@color/material_pink_100</item>
-        <item name="colorMaterial300">@color/material_pink_300</item>
+        <item name="colorMaterial100">@color/material_deep_purple_100</item>
+        <item name="colorMaterial300">@color/material_deep_purple_300</item>
 
         <item name="accentOrTextSecondary">?colorAccent</item>
         <item name="accentOrTextPrimary">?colorAccent</item>
@@ -53,12 +53,12 @@
         <item name="actionModeCloseDrawable">@drawable/ic_navigation_close</item>
         <item name="colorButtonNormal">?colorAccent</item>
         <item name="android:navigationBarColor">?colorPrimaryDark</item>
-        <item name="colorPrimary">@color/material_pink_500</item>
-        <item name="colorPrimaryDark">@color/material_pink_700</item>
-        <item name="colorAccent">@color/material_pink_accent_200</item>
+        <item name="colorPrimary">@color/material_deep_purple_600</item>
+        <item name="colorPrimaryDark">@color/material_deep_purple_800</item>
+        <item name="colorAccent">@color/material_orange_accent_200</item>
 
-        <item name="colorMaterial100">@color/material_pink_100</item>
-        <item name="colorMaterial300">@color/material_pink_300</item>
+        <item name="colorMaterial100">@color/material_deep_purple_100</item>
+        <item name="colorMaterial300">@color/material_deep_purple_300</item>
 
         <item name="accentOrTextSecondary">?colorAccent</item>
         <item name="accentOrTextPrimary">?colorAccent</item>

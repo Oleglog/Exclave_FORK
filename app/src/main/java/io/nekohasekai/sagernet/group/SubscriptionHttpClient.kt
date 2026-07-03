@@ -28,27 +28,22 @@ object SubscriptionHttpClient {
 
         Logs.d("Subscription fetch: allowInsecure=${DataStore.allowInsecureOnRequest}, connected=$connected, link=${link.take(30)}...")
 
-        // When VPN is active, we MUST use the IPC proxy (useProxy=true).
-        // Direct connections (useProxy=false) create sockets that go through the
-        // VPN tunnel, causing a routing loop and connection failure.
-        // The IPC proxy tunnels through v2ray which properly routes outbound traffic.
-        //
-        // Go HTTP client's InsecureSkipVerify works over IPC because TLS handshake
-        // is performed by the Go client over the tunnel, not by the proxy kernel.
-        if (connected) {
-            return fetchViaGo(link, ua, useProxy = true)
-        }
-
-        // VPN not active: direct connections work fine.
-        // When allowInsecureOnRequest is enabled, prefer Go client (supports
-        // InsecureSkipVerify), fallback to Java client (also supports insecure SSL).
+        // If the user explicitly allows insecure subscription requests, go
+        // directly and bypass the local proxy even when the VPN is running.
+        // Otherwise the proxy core performs the TLS handshake and still applies
+        // its own certificate checks/route allowlist, so allowInsecureOnRequest
+        // cannot help with self-signed or non-allowlisted subscription hosts.
         if (DataStore.allowInsecureOnRequest) {
             return try {
                 fetchViaGo(link, ua, useProxy = false)
             } catch (goEx: Exception) {
-                Logs.w("Go HTTP failed, trying Java client: ${goEx.message}")
+                Logs.w("Go direct HTTP failed, trying Java client: ${goEx.message}")
                 fetchViaJava(link, ua)
             }
+        }
+
+        if (connected) {
+            return fetchViaGo(link, ua, useProxy = true)
         }
 
         return try {

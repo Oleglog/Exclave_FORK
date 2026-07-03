@@ -1,101 +1,129 @@
-# olcRTC for Android (fork of Exclave)
-## В разарботке. Пилим под [новую ветку](https://github.com/openlibrecommunity/olcrtc/tree/refactor/universal-carrier) так что может вообще не работать.
+# olcRTC Android Client
 
-> **Android-клиент для [olcRTC](https://github.com/Oleglog/Olcrtc_manager)** —
-> туннеля, прячущего трафик внутри WebRTC-сессий публичных российских
-> видеоконференций (Wildberries Stream / Yandex Telemost / SaluteJazz).
->
-> **Android client for [olcRTC](https://github.com/Oleglog/Olcrtc_manager)** —
-> a tunnel hiding traffic inside WebRTC sessions of public Russian video-
-> conferencing services (Wildberries Stream / Yandex Telemost / SaluteJazz).
->
-> Подробная документация по форку, гайд по серверу, сборке APK и
-> использованию: **[`README-olcRTC.md`](./README-olcRTC.md)** (RU + EN).
->
-> Полные настройки сервера: [Oleglog/Olcrtc_manager](https://github.com/Oleglog/Olcrtc_manager).
->
-> Готовые APK: [GitHub releases](https://github.com/Oleglog/Exclave_olcrtc/releases)
-> (нужен `olcRTC-<version>-arm64-v8a.apk` для большинства телефонов).
->
-> Этот форк основан на [dyhkwong/Exclave](https://github.com/dyhkwong/Exclave),
-> upstream README которого приведён ниже для справки.
+Android-клиент для [olcRTC server](https://github.com/Oleglog/Olcrtc_manager), основанный на Exclave/SagerNet.
 
----
+## Что это
 
-# Exclave
+Приложение добавляет профиль **olcRTC** и поднимает системный VPN на Android. Трафик приложений идёт через локальный SOCKS5 в Go-клиент olcRTC, затем через WebRTC carrier к серверу на VPS.
 
-Exclave is a proxy client.
+Поддерживаемые provider:
 
-<details>
+```text
+jitsi, telemost, wbstream
+```
 
-Features:
+Поддерживаемые transport:
 
-- Various proxy protocols
-- Group and subscription
-- Routing
-- Proxy chain
+```text
+datachannel, vp8channel, seichannel, videochannel
+```
 
-Some supported protocols:
+Рекомендуемый default:
 
-- Shadowsocks (with SIP003 plugin support)
-- Shadowsocks 2022 (with SIP003 plugin support)
-- Trojan
-- Hysteria 2
-- AnyTLS
-- mieru
-- NaïveProxy (as a standalone plugin)
-- TUIC
-- Juicity
-- VMess (with various optional sub-protocols)
-- VLESS (with various optional sub-protocols)
-- WireGuard (TCP and UDP only)
-- TrustTunnel (no ICMP echo support)
-- SSH proxy ("dynamic port forwarding")
-- HTTP CONNECT tunnel (HTTP/1.1, HTTP/1.1 with TLS, HTTP/2 and HTTP/3)
-- SOCKS4, SOCKS4A and SOCKS5
+```text
+transport = vp8channel
+```
 
-</details>
+## Актуальная совместимость
 
-It is a fork of the archived Android proxy client SagerNet and uses a custom overhauled fork of V2Ray.
+```text
+Android: olcrtc-2.0.22+
+Server:  server-v1.9.31+
+```
 
-## Download
+Важно: для `vp8channel` сервер и клиент должны быть обновлены вместе, потому что в релизах `server-v1.9.27 / olcrtc-2.0.17` добавлен CRC trailer для KCP packets.
 
-[![GitHub releases](https://img.shields.io/badge/-GitHub%20Releases-7B68EE.svg?style=flat-square&logo=github)](https://github.com/dyhkwong/Exclave/releases)
+## Установка
 
-## Build
+Скачай APK из GitHub Releases:
 
-[![Workflow status](https://img.shields.io/github/actions/workflow/status/dyhkwong/Exclave/build.yml?branch=dev&style=flat-square)](https://github.com/dyhkwong/Exclave/actions/workflows/build.yml?query=branch%3Adev) [![Latest commit on dev branch](https://img.shields.io/github/last-commit/dyhkwong/Exclave/dev?style=flat-square)](https://github.com/dyhkwong/Exclave/tree/dev)
+```text
+https://github.com/Oleglog/Exclave_olcrtc/releases
+```
 
-## Translation
+Для большинства телефонов нужен:
 
-[![Translation status](https://hosted.weblate.org/widget/exclave/multi-auto.svg)](https://hosted.weblate.org/engage/exclave/)
+```text
+olcRTC-<version>-arm64-v8a.apk
+```
 
-[Hosted Weblate](https://hosted.weblate.org/projects/exclave/)
+Для старых 32-bit устройств:
 
-## Issues
+```text
+olcRTC-<version>-armeabi-v7a.apk
+```
 
-Old versions are not supported. Please ensure you are using the latest version.
+## Импорт профиля
 
-Crash reports require debug-level logs.
+Самый удобный способ:
 
-[Encrypt the report files with the following GPG public key.](https://github.com/dyhkwong.gpg)
+1. Открой Admin UI сервера.
+2. Создай или открой инстанс.
+3. Нажми QR.
+4. Отсканируй QR в приложении.
+
+QR может включать `auth_token` для WB Stream, поэтому считай QR секретом.
+
+## WB Stream auth.token
+
+Для `wbstream`, особенно для `datachannel`, может понадобиться аккаунтный/модераторский WB token. Приложение умеет импортировать `auth_token` из QR/URI и хранить его в профиле.
+
+## Подписки
+
+Если subscription URL использует самоподписанный сертификат или находится вне маршрутов активного VPN, включи настройку:
+
+```text
+allowInsecureOnRequest
+```
+
+В этой версии при включённом `allowInsecureOnRequest` обновление подписки идёт напрямую и отключает TLS-проверку для subscription request.
+
+## Подпись APK
+
+Release APK должен быть подписан постоянным ключом, иначе Android не сможет обновлять приложение поверх старой установки.
+
+GitHub Actions release build использует secrets:
+
+```text
+RELEASE_KEYSTORE_BASE64
+KEYSTORE_PASS
+ALIAS_NAME
+ALIAS_PASS
+```
+
+Создание ключа:
+
+```bash
+keytool -genkeypair   -v   -keystore release.keystore   -alias olcrtc   -keyalg RSA   -keysize 4096   -validity 10000
+```
+
+Добавить keystore в GitHub Secret:
+
+```bash
+base64 -w0 release.keystore
+```
+
+Значение положить в `RELEASE_KEYSTORE_BASE64`, пароли и alias в остальные secrets.
+
+Не коммить `release.keystore` в репозиторий.
+
+## Сборка
+
+```bash
+./run lib core
+./gradlew :app:assembleOssDebug
+```
+
+Release build локально:
+
+```bash
+# local.properties должен содержать KEYSTORE_PASS, ALIAS_NAME, ALIAS_PASS
+# release.keystore должен лежать в корне репозитория
+./gradlew :app:assembleOssRelease
+```
+
+Подробности: `README-olcRTC.md` и `BUILD.md`.
 
 ## License
 
-```
-Copyright (C) 2023  dyhkwong
-Copyright (C) 2021 by nekohasekai <contact-sagernet@sekai.icu>
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-```
+GPLv3, как Exclave/SagerNet. olcRTC Go-core использует свою upstream-лицензию.
