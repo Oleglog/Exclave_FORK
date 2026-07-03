@@ -48,6 +48,7 @@ import io.nekohasekai.sagernet.database.DataStore
 import io.nekohasekai.sagernet.database.ProfileManager
 import io.nekohasekai.sagernet.databinding.LayoutScannerBinding
 import io.nekohasekai.sagernet.group.RawUpdater
+import io.nekohasekai.sagernet.group.SubscriptionBundleImporter
 import io.nekohasekai.sagernet.ktx.*
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -157,6 +158,9 @@ class ScannerActivity : ThemedActivity() {
         finish()
         runOnDefaultDispatcher {
             try {
+                if (SubscriptionBundleImporter.tryImport(value)) {
+                    return@runOnDefaultDispatcher
+                }
                 val results = RawUpdater.parseRaw(value)
                 if (results.isNullOrEmpty()) {
                     if (!value.contains("\n") && !value.contains("\r")
@@ -240,7 +244,13 @@ class ScannerActivity : ThemedActivity() {
                                 )
                             }
 
-                            val results = RawUpdater.parseRaw(result.text ?: "")
+                            val rawText = result.text ?: ""
+                            if (SubscriptionBundleImporter.tryImport(rawText)) {
+                                onMainDispatcher { finish() }
+                                return@forEachTry
+                            }
+
+                            val results = RawUpdater.parseRaw(rawText)
 
                             if (!results.isNullOrEmpty()) {
                                 onMainDispatcher {

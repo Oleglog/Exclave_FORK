@@ -28,11 +28,24 @@ object SubscriptionHttpClient {
 
         Logs.d("Subscription fetch: allowInsecure=${DataStore.allowInsecureOnRequest}, connected=$connected, link=${link.take(30)}...")
 
-        // If the user explicitly allows insecure subscription requests, go
-        // directly and bypass the local proxy even when the VPN is running.
-        // Otherwise the proxy core performs the TLS handshake and still applies
-        // its own certificate checks/route allowlist, so allowInsecureOnRequest
-        // cannot help with self-signed or non-allowlisted subscription hosts.
+        if (connected) {
+            // When the VPN/olcRTC tunnel is already running, subscription URLs
+            // must be fetched through the active proxy core first. A direct
+            // app-side request can leave through the mobile network instead and
+            // hit the carrier allowlist/block page or a different virtual host.
+            try {
+                return fetchViaGo(link, ua, useProxy = true)
+            } catch (proxyEx: Exception) {
+                Logs.w("Proxy subscription fetch failed, trying direct client: ${proxyEx.message}")
+                try {
+                    return fetchViaJava(link, ua)
+                } catch (javaEx: Exception) {
+                    Logs.w("Direct Java subscription fetch also failed: ${javaEx.message}")
+                    throw proxyEx
+                }
+            }
+        }
+
         if (DataStore.allowInsecureOnRequest) {
             return try {
                 fetchViaGo(link, ua, useProxy = false)
@@ -40,22 +53,6 @@ object SubscriptionHttpClient {
                 Logs.w("Go direct HTTP failed, trying Java client: ${goEx.message}")
                 fetchViaJava(link, ua)
             }
-        }
-
-        if (connected) {
-            // Subscription URLs are user-approved sources. For HTTPS public
-            // subscription domains, prefer a direct app-side fetch even while
-            // VPN is active so updates are not blocked by the currently active
-            // proxy route/allowlist. If direct access is unavailable, fall back
-            // to the existing proxy-core path.
-            if (shouldTryDirectHttps(link)) {
-                try {
-                    return fetchViaJava(link, ua)
-                } catch (javaEx: Exception) {
-                    Logs.w("Direct HTTPS subscription fetch failed, trying proxy: ${javaEx.message}")
-                }
-            }
-            return fetchViaGo(link, ua, useProxy = true)
         }
 
         return try {
@@ -70,19 +67,6 @@ object SubscriptionHttpClient {
             }
         }
     }
-
-    private fun shouldTryDirectHttps(link: String): Boolean {
-        return try {
-            val url = URL(link)
-            url.protocol.equals("https", ignoreCase = true) &&
-                    !url.host.equals("localhost", ignoreCase = true) &&
-                    url.host != "127.0.0.1" &&
-                    url.host != "::1"
-        } catch (_: Exception) {
-            false
-        }
-    }
-
     private fun fetchViaGo(link: String, ua: String, useProxy: Boolean): SubscriptionResponse {
         val response = Libsagernetcore.newHttpClient().apply {
             if (useProxy) {

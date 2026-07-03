@@ -1,0 +1,70 @@
+package io.nekohasekai.sagernet.group
+
+import io.nekohasekai.sagernet.GroupType
+import io.nekohasekai.sagernet.SubscriptionType
+import io.nekohasekai.sagernet.database.DataStore
+import io.nekohasekai.sagernet.database.GroupManager
+import io.nekohasekai.sagernet.database.ProfileManager
+import io.nekohasekai.sagernet.database.ProxyGroup
+import io.nekohasekai.sagernet.database.SubscriptionBean
+import io.nekohasekai.sagernet.ktx.applyDefaultValues
+import io.nekohasekai.sagernet.ktx.getBoolean
+import io.nekohasekai.sagernet.ktx.getString
+import io.nekohasekai.sagernet.ktx.getStringArray
+import io.nekohasekai.sagernet.ktx.parseJson
+
+object SubscriptionBundleImporter {
+
+    private const val TYPE_COMPACT = "olcrtc-sub"
+    private const val TYPE_VERBOSE = "olcrtc_subscription_bundle"
+
+    suspend fun tryImport(text: String): Boolean {
+        val root = runCatching { parseJson(text) }.getOrNull() ?: return false
+        if (!root.isJsonObject) return false
+
+        val obj = root.asJsonObject
+        val type = obj.getString("type", ignoreCase = true) ?: return false
+        if (!type.equals(TYPE_COMPACT, ignoreCase = true) && !type.equals(TYPE_VERBOSE, ignoreCase = true)) {
+            return false
+        }
+
+        val subscriptionUrl = obj.getString("url", ignoreCase = true)
+            ?: obj.getString("subscription_url", ignoreCase = true)
+            ?: return false
+        if (!subscriptionUrl.startsWith("http://", ignoreCase = true) &&
+            !subscriptionUrl.startsWith("https://", ignoreCase = true)) {
+            return false
+        }
+
+        val profileUris = obj.getStringArray("profiles", ignoreCase = true)
+            ?.map { it.trim() }
+            ?.filter { it.startsWith("olcrtc://", ignoreCase = true) }
+            ?: return false
+        if (profileUris.isEmpty()) return false
+
+        val profiles = RawUpdater.parseRaw(profileUris.joinToString("\n")) ?: return false
+        if (profiles.isEmpty()) return false
+
+        val name = obj.getString("name", ignoreCase = true)
+            ?.takeIf { it.isNotBlank() }
+            ?: "olcRTC subscription"
+
+        val group = GroupManager.createGroup(ProxyGroup(
+            name = name,
+            type = GroupType.SUBSCRIPTION,
+            subscription = SubscriptionBean().applyDefaultValues().apply {
+                type = SubscriptionType.RAW
+                link = subscriptionUrl
+                deduplication = obj.getBoolean("deduplication", ignoreCase = true) ?: true
+                updateWhenConnectedOnly = obj.getBoolean("update_when_connected_only", ignoreCase = true) ?: true
+                autoUpdate = obj.getBoolean("auto_update", ignoreCase = true) ?: false
+            }
+        ))
+
+        DataStore.selectedGroup = group.id
+        for (profile in profiles) {
+            ProfileManager.createProfile(group.id, profile)
+        }
+        return true
+    }
+}

@@ -1,4 +1,4 @@
-// Build trigger for v0.17.38-olcrtc.15 debug
+// Build trigger for olcrtc-2.0.24 release
 plugins {
     id("com.android.application")
     id("kotlin-parcelize")
