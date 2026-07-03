@@ -43,6 +43,18 @@ object SubscriptionHttpClient {
         }
 
         if (connected) {
+            // Subscription URLs are user-approved sources. For HTTPS public
+            // subscription domains, prefer a direct app-side fetch even while
+            // VPN is active so updates are not blocked by the currently active
+            // proxy route/allowlist. If direct access is unavailable, fall back
+            // to the existing proxy-core path.
+            if (shouldTryDirectHttps(link)) {
+                try {
+                    return fetchViaJava(link, ua)
+                } catch (javaEx: Exception) {
+                    Logs.w("Direct HTTPS subscription fetch failed, trying proxy: ${javaEx.message}")
+                }
+            }
             return fetchViaGo(link, ua, useProxy = true)
         }
 
@@ -56,6 +68,18 @@ object SubscriptionHttpClient {
                 Logs.w("Go HTTP also failed: ${goEx.message}")
                 throw javaEx
             }
+        }
+    }
+
+    private fun shouldTryDirectHttps(link: String): Boolean {
+        return try {
+            val url = URL(link)
+            url.protocol.equals("https", ignoreCase = true) &&
+                    !url.host.equals("localhost", ignoreCase = true) &&
+                    url.host != "127.0.0.1" &&
+                    url.host != "::1"
+        } catch (_: Exception) {
+            false
         }
     }
 
