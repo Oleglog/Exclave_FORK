@@ -20,6 +20,7 @@
 package io.nekohasekai.sagernet.group
 
 import io.nekohasekai.sagernet.fmt.AbstractBean
+import io.nekohasekai.sagernet.fmt.olcrtc.OLCRTCBean
 
 object Protocols {
 
@@ -28,6 +29,18 @@ object Protocols {
     ) {
 
         fun hash(): String {
+            if (bean is OLCRTCBean) {
+                return listOf(
+                    type,
+                    bean.provider,
+                    bean.transport,
+                    bean.roomId,
+                    bean.roomPassword,
+                    bean.clientId,
+                    bean.authToken,
+                    bean.keyHex,
+                ).joinToString("|")
+            }
             return bean.serverAddress + bean.serverPort + type
         }
 
