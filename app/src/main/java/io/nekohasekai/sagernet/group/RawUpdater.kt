@@ -22,6 +22,8 @@ package io.nekohasekai.sagernet.group
 
 import androidx.core.net.toUri
 import io.nekohasekai.sagernet.R
+import io.nekohasekai.sagernet.SagerNet
+import io.nekohasekai.sagernet.database.DataStore
 import io.nekohasekai.sagernet.database.GroupManager
 import io.nekohasekai.sagernet.database.ProxyEntity
 import io.nekohasekai.sagernet.database.ProxyGroup
@@ -65,14 +67,28 @@ object RawUpdater : GroupUpdater() {
             proxies = contentText?.let { parseRaw(contentText) }
                 ?: error(app.getString(R.string.no_proxies_found_in_subscription))
         } else {
-            val response = SubscriptionHttpClient.fetch(
-                subscription.link, subscription.customUserAgent
-            )
+            val connected = SagerNet.started && DataStore.startedProfile > 0
+            val responseContent: String
+            val responseHeaders: Map<String, String>
+            if (!connected && SubscriptionMirrorFetcher.canFetch(
+                    subscription.mirrorType, subscription.mirrorUrl, subscription.mirrorKey
+                )) {
+                responseContent = SubscriptionMirrorFetcher.fetch(
+                    subscription.mirrorType, subscription.mirrorUrl, subscription.mirrorKey
+                )
+                responseHeaders = emptyMap()
+            } else {
+                val response = SubscriptionHttpClient.fetch(
+                    subscription.link, subscription.customUserAgent
+                )
+                responseContent = response.contentString
+                responseHeaders = response.headers
+            }
 
-            proxies = parseRaw(response.contentString)
+            proxies = parseRaw(responseContent)
                 ?: error(app.getString(R.string.no_proxies_found))
 
-            val subscriptionUserinfo = response.headers["Subscription-Userinfo"] ?: ""
+            val subscriptionUserinfo = responseHeaders["Subscription-Userinfo"] ?: ""
             if (subscriptionUserinfo.isNotEmpty()) {
                 fun get(regex: String): String? {
                     return regex.toRegex().findAll(subscriptionUserinfo).mapNotNull {

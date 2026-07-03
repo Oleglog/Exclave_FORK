@@ -48,6 +48,13 @@ object SubscriptionBundleImporter {
         val name = obj.getString("name", ignoreCase = true)
             ?.takeIf { it.isNotBlank() }
             ?: "olcRTC subscription"
+        val mirrorKey = obj.getString("mirror_key", ignoreCase = true).orEmpty()
+        var mirrorType = ""
+        var mirrorUrl = ""
+        obj.get("mirrors")?.takeIf { it.isJsonArray }?.asJsonArray?.firstOrNull { it.isJsonObject }?.asJsonObject?.let { mirror ->
+            mirrorType = mirror.getString("type", ignoreCase = true).orEmpty()
+            mirrorUrl = mirror.getString("url", ignoreCase = true).orEmpty()
+        }
 
         val group = GroupManager.createGroup(ProxyGroup(
             name = name,
@@ -58,6 +65,9 @@ object SubscriptionBundleImporter {
                 deduplication = obj.getBoolean("deduplication", ignoreCase = true) ?: true
                 updateWhenConnectedOnly = obj.getBoolean("update_when_connected_only", ignoreCase = true) ?: true
                 autoUpdate = obj.getBoolean("auto_update", ignoreCase = true) ?: false
+                this.mirrorType = mirrorType
+                this.mirrorUrl = mirrorUrl
+                this.mirrorKey = mirrorKey
             }
         ))
 

@@ -41,6 +41,9 @@ public class SubscriptionBean extends Serializable {
     public Long bytesUsed;
     public Long bytesRemaining;
     public Long expiryDate;
+    public String mirrorType;
+    public String mirrorUrl;
+    public String mirrorKey;
 
     public String nameFilter;
     public String nameFilter1;
@@ -50,7 +53,7 @@ public class SubscriptionBean extends Serializable {
 
     @Override
     public void serializeToBuffer(ByteBufferOutput output) {
-        output.writeInt(8);
+        output.writeInt(9);
         output.writeInt(type);
         output.writeString(link);
         output.writeBoolean(deduplication);
@@ -64,6 +67,9 @@ public class SubscriptionBean extends Serializable {
         output.writeLong(expiryDate);
         output.writeString(nameFilter);
         output.writeString(nameFilter1);
+        output.writeString(mirrorType);
+        output.writeString(mirrorUrl);
+        output.writeString(mirrorKey);
     }
 
     public void serializeForShare(ByteBufferOutput output) {
@@ -144,6 +150,11 @@ public class SubscriptionBean extends Serializable {
         if (version >= 8) {
             nameFilter1 = input.readString();
         }
+        if (version >= 9) {
+            mirrorType = input.readString();
+            mirrorUrl = input.readString();
+            mirrorKey = input.readString();
+        }
     }
 
     public void deserializeFromShare(ByteBufferInput input) {
@@ -210,6 +221,9 @@ public class SubscriptionBean extends Serializable {
         if (bytesRemaining == null) bytesRemaining = 0L;
         if (nameFilter == null) nameFilter = "";
         if (nameFilter1 == null) nameFilter1 = "";
+        if (mirrorType == null) mirrorType = "";
+        if (mirrorUrl == null) mirrorUrl = "";
+        if (mirrorKey == null) mirrorKey = "";
 
         if (expiryDate == null) expiryDate = 0L;
     }
