@@ -31,17 +31,17 @@ fun parseOLCRTC(url: String): OLCRTCBean {
     return OLCRTCBean().apply {
         provider = normalizeCarrier(link.username)
         roomId = link.path.trimStart('/')
-        roomPassword = link.queryParameter("room_password") ?: ""
-        keyHex = link.queryParameter("key") ?: ""
-        dnsServer = link.queryParameter("dns") ?: "77.88.8.8:53"
-        transport = link.queryParameter("transport") ?: OLCRTCBean.TRANSPORT_DATACHANNEL
-        vp8Fps = link.queryParameter("vp8_fps")?.toIntOrNull()?.takeIf { it > 0 } ?: 60
-        vp8BatchSize = link.queryParameter("vp8_batch")?.toIntOrNull()?.takeIf { it > 0 } ?: 8
-        keepaliveIntervalSec = link.queryParameter("keepalive")?.toIntOrNull() ?: 15
+        roomPassword = link.queryParameter("room_password") ?: link.queryParameter("rp") ?: ""
+        keyHex = link.queryParameter("key") ?: link.queryParameter("k") ?: ""
+        dnsServer = link.queryParameter("dns") ?: link.queryParameter("d") ?: "77.88.8.8:53"
+        transport = link.queryParameter("transport") ?: link.queryParameter("t") ?: OLCRTCBean.TRANSPORT_DATACHANNEL
+        vp8Fps = (link.queryParameter("vp8_fps") ?: link.queryParameter("f"))?.toIntOrNull()?.takeIf { it > 0 } ?: 60
+        vp8BatchSize = (link.queryParameter("vp8_batch") ?: link.queryParameter("b"))?.toIntOrNull()?.takeIf { it > 0 } ?: 8
+        keepaliveIntervalSec = (link.queryParameter("keepalive") ?: link.queryParameter("ka"))?.toIntOrNull() ?: 15
         // Server-issued client identifier; optional for backward compatibility
         // with URIs exported before the server-side S8 work landed.
-        clientId = link.queryParameter("client_id") ?: ""
-        authToken = link.queryParameter("auth_token") ?: link.queryParameter("auth.token") ?: ""
+        clientId = link.queryParameter("client_id") ?: link.queryParameter("c") ?: ""
+        authToken = link.queryParameter("auth_token") ?: link.queryParameter("auth.token") ?: link.queryParameter("a") ?: ""
         name = link.fragment ?: ""
 
         validate()

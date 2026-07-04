@@ -47,6 +47,7 @@ import io.nekohasekai.sagernet.R
 import io.nekohasekai.sagernet.database.DataStore
 import io.nekohasekai.sagernet.database.ProfileManager
 import io.nekohasekai.sagernet.databinding.LayoutScannerBinding
+import io.nekohasekai.sagernet.group.QRPayloadCodec
 import io.nekohasekai.sagernet.group.RawUpdater
 import io.nekohasekai.sagernet.group.SubscriptionBundleImporter
 import io.nekohasekai.sagernet.ktx.*
@@ -158,23 +159,24 @@ class ScannerActivity : ThemedActivity() {
         finish()
         runOnDefaultDispatcher {
             try {
-                if (SubscriptionBundleImporter.tryImport(value)) {
+                val decodedValue = QRPayloadCodec.decodeIfNeeded(value)
+                if (SubscriptionBundleImporter.tryImport(decodedValue)) {
                     return@runOnDefaultDispatcher
                 }
-                val results = RawUpdater.parseRaw(value)
+                val results = RawUpdater.parseRaw(decodedValue)
                 if (results.isNullOrEmpty()) {
-                    if (!value.contains("\n") && !value.contains("\r")
-                        && value.startsWith("exclave://", ignoreCase = true)
-                        && value.substring("exclave://".length).startsWith("subscription?", ignoreCase = true)) {
+                    if (!decodedValue.contains("\n") && !decodedValue.contains("\r")
+                        && decodedValue.startsWith("exclave://", ignoreCase = true)
+                        && decodedValue.substring("exclave://".length).startsWith("subscription?", ignoreCase = true)) {
                         startActivity(Intent(this@ScannerActivity, MainActivity::class.java).apply {
                             action = Intent.ACTION_VIEW
-                            data = value.toUri()
+                            data = decodedValue.toUri()
                         })
-                    } else if (!value.contains("\n") && !value.contains("\r") && isHTTPorHTTPSURL(value)) {
+                    } else if (!decodedValue.contains("\n") && !decodedValue.contains("\r") && isHTTPorHTTPSURL(decodedValue)) {
                         val builder = Libsagernetcore.newURL("exclave").apply {
                             host = "subscription"
                         }
-                        builder.addQueryParameter("url", value)
+                        builder.addQueryParameter("url", decodedValue)
                         startActivity(Intent(this@ScannerActivity, MainActivity::class.java).apply {
                             action = Intent.ACTION_VIEW
                             data = builder.string.toUri()
@@ -244,7 +246,7 @@ class ScannerActivity : ThemedActivity() {
                                 )
                             }
 
-                            val rawText = result.text ?: ""
+                            val rawText = QRPayloadCodec.decodeIfNeeded(result.text ?: "")
                             if (SubscriptionBundleImporter.tryImport(rawText)) {
                                 onMainDispatcher { finish() }
                                 return@forEachTry
@@ -267,19 +269,19 @@ class ScannerActivity : ThemedActivity() {
                                     }
                                 }
                             } else {
-                                if (!result.text.contains("\n") && !result.text.contains("\r")
-                                    && result.text.startsWith("exclave://", ignoreCase = true)
-                                    && result.text.substring("exclave://".length).startsWith("subscription?", ignoreCase = true)) {
+                                if (!rawText.contains("\n") && !rawText.contains("\r")
+                                    && rawText.startsWith("exclave://", ignoreCase = true)
+                                    && rawText.substring("exclave://".length).startsWith("subscription?", ignoreCase = true)) {
                                     startActivity(Intent(this@ScannerActivity, MainActivity::class.java).apply {
                                         action = Intent.ACTION_VIEW
-                                        data = result.text.toUri()
+                                        data = rawText.toUri()
                                     })
                                     finish()
-                                } else if (!result.text.contains("\n") && !result.text.contains("\r") && isHTTPorHTTPSURL(result.text)) {
+                                } else if (!rawText.contains("\n") && !rawText.contains("\r") && isHTTPorHTTPSURL(rawText)) {
                                     val builder = Libsagernetcore.newURL("exclave").apply {
                                         host = "subscription"
                                     }
-                                    builder.addQueryParameter("url", result.text)
+                                    builder.addQueryParameter("url", rawText)
                                     startActivity(Intent(this@ScannerActivity, MainActivity::class.java).apply {
                                         action = Intent.ACTION_VIEW
                                         data = builder.string.toUri()

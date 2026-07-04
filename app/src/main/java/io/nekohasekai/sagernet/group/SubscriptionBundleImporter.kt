@@ -29,6 +29,7 @@ object SubscriptionBundleImporter {
         }
 
         val subscriptionUrl = obj.getString("url", ignoreCase = true)
+            ?: obj.getString("u", ignoreCase = true)
             ?: obj.getString("subscription_url", ignoreCase = true)
             ?: return false
         if (!subscriptionUrl.startsWith("http://", ignoreCase = true) &&
@@ -36,7 +37,8 @@ object SubscriptionBundleImporter {
             return false
         }
 
-        val profileUris = obj.getStringArray("profiles", ignoreCase = true)
+        val profileUris = (obj.getStringArray("profiles", ignoreCase = true)
+            ?: obj.getStringArray("p", ignoreCase = true))
             ?.map { it.trim() }
             ?.filter { it.startsWith("olcrtc://", ignoreCase = true) }
             ?: return false
@@ -45,15 +47,17 @@ object SubscriptionBundleImporter {
         val profiles = RawUpdater.parseRaw(profileUris.joinToString("\n")) ?: return false
         if (profiles.isEmpty()) return false
 
-        val name = obj.getString("name", ignoreCase = true)
+        val name = (obj.getString("name", ignoreCase = true)
+            ?: obj.getString("n", ignoreCase = true))
             ?.takeIf { it.isNotBlank() }
             ?: "olcRTC subscription"
-        val mirrorKey = obj.getString("mirror_key", ignoreCase = true).orEmpty()
+        val mirrorKey = (obj.getString("mirror_key", ignoreCase = true)
+            ?: obj.getString("mk", ignoreCase = true)).orEmpty()
         var mirrorType = ""
         var mirrorUrl = ""
-        obj.get("mirrors")?.takeIf { it.isJsonArray }?.asJsonArray?.firstOrNull { it.isJsonObject }?.asJsonObject?.let { mirror ->
-            mirrorType = mirror.getString("type", ignoreCase = true).orEmpty()
-            mirrorUrl = mirror.getString("url", ignoreCase = true).orEmpty()
+        (obj.get("mirrors") ?: obj.get("m"))?.takeIf { it.isJsonArray }?.asJsonArray?.firstOrNull { it.isJsonObject }?.asJsonObject?.let { mirror ->
+            mirrorType = (mirror.getString("type", ignoreCase = true) ?: mirror.getString("t", ignoreCase = true)).orEmpty()
+            mirrorUrl = (mirror.getString("url", ignoreCase = true) ?: mirror.getString("u", ignoreCase = true)).orEmpty()
         }
 
         val group = GroupManager.createGroup(ProxyGroup(
@@ -62,9 +66,15 @@ object SubscriptionBundleImporter {
             subscription = SubscriptionBean().applyDefaultValues().apply {
                 this.type = SubscriptionType.RAW
                 link = subscriptionUrl
-                deduplication = obj.getBoolean("deduplication", ignoreCase = true) ?: true
-                updateWhenConnectedOnly = obj.getBoolean("update_when_connected_only", ignoreCase = true) ?: true
-                autoUpdate = obj.getBoolean("auto_update", ignoreCase = true) ?: false
+                deduplication = obj.getBoolean("deduplication", ignoreCase = true)
+                    ?: obj.getBoolean("d", ignoreCase = true)
+                    ?: true
+                updateWhenConnectedOnly = obj.getBoolean("update_when_connected_only", ignoreCase = true)
+                    ?: obj.getBoolean("uc", ignoreCase = true)
+                    ?: true
+                autoUpdate = obj.getBoolean("auto_update", ignoreCase = true)
+                    ?: obj.getBoolean("au", ignoreCase = true)
+                    ?: false
                 this.mirrorType = mirrorType
                 this.mirrorUrl = mirrorUrl
                 this.mirrorKey = mirrorKey

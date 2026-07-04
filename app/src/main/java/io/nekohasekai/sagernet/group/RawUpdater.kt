@@ -242,9 +242,10 @@ object RawUpdater : GroupUpdater() {
 
     @Suppress("UNCHECKED_CAST")
     fun parseRaw(text: String): List<AbstractBean>? {
-        if (text.trimStart().startsWith("{")) {
+        val decodedText = QRPayloadCodec.decodeIfNeeded(text)
+        if (decodedText.trimStart().startsWith("{")) {
             runCatching {
-                return listOf(parseOLCRTCJson(text))
+                return listOf(parseOLCRTCJson(decodedText))
             }
         }
         try {
@@ -262,7 +263,7 @@ object RawUpdater : GroupUpdater() {
                 // IDK why but `!<str>` is obviously widely used in Clash ecology
                 // https://github.com/search?q=!%3Cstr%3E&type=code
                 // addTypeDescription(TypeDescription(String::class.java, "str"))
-            }.loadAs(text, Map::class.java)
+            }.loadAs(decodedText, Map::class.java)
             (yaml["proxies"] as? List<Map<String, Any?>>)?.let { proxies ->
                 parseClashProxies(proxies).takeIf { it.isNotEmpty() }?.let {
                     return it
@@ -270,22 +271,22 @@ object RawUpdater : GroupUpdater() {
             }
         } catch (_: Exception) {}
         try {
-            parseJSONConfig(text).takeIf { it.isNotEmpty() }?.let {
+            parseJSONConfig(decodedText).takeIf { it.isNotEmpty() }?.let {
                 return it
             }
         } catch (_: Exception) {}
         try {
-            parseShareLinks(text.decodeBase64()).takeIf { it.isNotEmpty() }?.let {
+            parseShareLinks(decodedText.decodeBase64()).takeIf { it.isNotEmpty() }?.let {
                 return it
             }
         } catch (_: Exception) {}
         try {
-            parseShareLinks(text).takeIf { it.isNotEmpty() }?.let {
+            parseShareLinks(decodedText).takeIf { it.isNotEmpty() }?.let {
                 return it
             }
         } catch (_: Exception) {}
         try {
-            parseWireGuardConfig(text).takeIf { it.isNotEmpty() }?.let {
+            parseWireGuardConfig(decodedText).takeIf { it.isNotEmpty() }?.let {
                 return it
             }
         } catch (_: Exception) {}
