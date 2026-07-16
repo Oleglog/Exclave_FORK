@@ -78,6 +78,8 @@ object SubscriptionHttpClient {
             }
             setURL(link)
             setUserAgent(ua)
+            setHeader("Cache-Control", "no-cache, no-store")
+            setHeader("Pragma", "no-cache")
         }.execute()
 
         val headers = mutableMapOf<String, String>()
@@ -97,7 +99,10 @@ object SubscriptionHttpClient {
                 conn.hostnameVerifier = HostnameVerifier { _, _ -> true }
             }
             conn.requestMethod = "GET"
+            conn.useCaches = false
             conn.setRequestProperty("User-Agent", ua)
+            conn.setRequestProperty("Cache-Control", "no-cache, no-store")
+            conn.setRequestProperty("Pragma", "no-cache")
             conn.connectTimeout = 15_000
             conn.readTimeout = 15_000
             conn.instanceFollowRedirects = true

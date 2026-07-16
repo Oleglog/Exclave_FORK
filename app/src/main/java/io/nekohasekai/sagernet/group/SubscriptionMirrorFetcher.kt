@@ -39,9 +39,12 @@ object SubscriptionMirrorFetcher {
     private fun httpGet(url: String): String {
         val conn = URL(url).openConnection() as HttpURLConnection
         conn.requestMethod = "GET"
+        conn.useCaches = false
         conn.connectTimeout = 15000
         conn.readTimeout = 30000
         conn.setRequestProperty("User-Agent", USER_AGENT)
+        conn.setRequestProperty("Cache-Control", "no-cache, no-store")
+        conn.setRequestProperty("Pragma", "no-cache")
         val code = conn.responseCode
         val stream = if (code in 200..299) conn.inputStream else conn.errorStream
         val body = stream?.bufferedReader()?.readText().orEmpty()

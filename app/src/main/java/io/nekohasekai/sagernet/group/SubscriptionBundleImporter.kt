@@ -7,6 +7,7 @@ import io.nekohasekai.sagernet.database.GroupManager
 import io.nekohasekai.sagernet.database.ProfileManager
 import io.nekohasekai.sagernet.database.ProxyGroup
 import io.nekohasekai.sagernet.database.SubscriptionBean
+import io.nekohasekai.sagernet.ktx.Logs
 import io.nekohasekai.sagernet.ktx.applyDefaultValues
 import io.nekohasekai.sagernet.ktx.getBoolean
 import io.nekohasekai.sagernet.ktx.getString
@@ -41,11 +42,13 @@ object SubscriptionBundleImporter {
             ?: obj.getStringArray("p", ignoreCase = true))
             ?.map { it.trim() }
             ?.filter { it.startsWith("olcrtc://", ignoreCase = true) }
-            ?: return false
-        if (profileUris.isEmpty()) return false
+            .orEmpty()
 
-        val profiles = RawUpdater.parseRaw(profileUris.joinToString("\n")) ?: return false
-        if (profiles.isEmpty()) return false
+        val profiles = if (profileUris.isEmpty()) {
+            emptyList()
+        } else {
+            RawUpdater.parseRaw(profileUris.joinToString("\n")) ?: return false
+        }
 
         val name = (obj.getString("name", ignoreCase = true)
             ?: obj.getString("n", ignoreCase = true))
@@ -84,6 +87,11 @@ object SubscriptionBundleImporter {
         DataStore.selectedGroup = group.id
         for (profile in profiles) {
             ProfileManager.createProfile(group.id, profile)
+        }
+        runCatching {
+            RawUpdater.doUpdate(group, requireNotNull(group.subscription), GroupManager.userInterface, false)
+        }.onFailure {
+            Logs.w("Initial URL-only subscription refresh failed: ${it.message}")
         }
         return true
     }

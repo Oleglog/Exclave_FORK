@@ -22,8 +22,6 @@ package io.nekohasekai.sagernet.group
 
 import androidx.core.net.toUri
 import io.nekohasekai.sagernet.R
-import io.nekohasekai.sagernet.SagerNet
-import io.nekohasekai.sagernet.database.DataStore
 import io.nekohasekai.sagernet.database.GroupManager
 import io.nekohasekai.sagernet.database.ProxyEntity
 import io.nekohasekai.sagernet.database.ProxyGroup
@@ -67,22 +65,25 @@ object RawUpdater : GroupUpdater() {
             proxies = contentText?.let { parseRaw(contentText) }
                 ?: error(app.getString(R.string.no_proxies_found_in_subscription))
         } else {
-            val connected = SagerNet.started && DataStore.startedProfile > 0
-            val responseContent: String
-            val responseHeaders: Map<String, String>
-            if (!connected && SubscriptionMirrorFetcher.canFetch(
-                    subscription.mirrorType, subscription.mirrorUrl, subscription.mirrorKey
-                )) {
-                responseContent = SubscriptionMirrorFetcher.fetch(
-                    subscription.mirrorType, subscription.mirrorUrl, subscription.mirrorKey
-                )
-                responseHeaders = emptyMap()
-            } else {
+            val (responseContent, responseHeaders) = try {
                 val response = SubscriptionHttpClient.fetch(
                     subscription.link, subscription.customUserAgent
                 )
-                responseContent = response.contentString
-                responseHeaders = response.headers
+                response.contentString to response.headers
+            } catch (primaryError: Exception) {
+                if (!SubscriptionMirrorFetcher.canFetch(
+                        subscription.mirrorType, subscription.mirrorUrl, subscription.mirrorKey
+                    )) {
+                    throw primaryError
+                }
+                try {
+                    SubscriptionMirrorFetcher.fetch(
+                        subscription.mirrorType, subscription.mirrorUrl, subscription.mirrorKey
+                    ) to emptyMap<String, String>()
+                } catch (mirrorError: Exception) {
+                    mirrorError.addSuppressed(primaryError)
+                    throw mirrorError
+                }
             }
 
             proxies = parseRaw(responseContent)
